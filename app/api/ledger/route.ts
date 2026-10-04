@@ -1,10 +1,10 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { cloudUser } from '@/lib/phone-auth';
 import { initialLedger, validateLedger } from '@/lib/ledger';
 import { ledgerDb } from '@/lib/ledger-db';
 import { splitPayload } from '@/lib/storage';
 const response=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
-export async function GET() {
-  const user=await getChatGPTUser();
+export async function GET(request:Request) {
+  const user=await cloudUser(request);
   if(!user)return response({error:'请先登录'},401);
   try {
     const db=ledgerDb();
@@ -16,19 +16,20 @@ export async function GET() {
     const row=metadata.results[0] as {payload:string;revision:number}|undefined;
     if(!row)throw new Error('账本读取失败');
     const payload=chunks.results.length?chunks.results.map(r=>(r as {payload:string}).payload).join(''):row.payload;
-    return response({ledger:JSON.parse(payload),revision:row.revision,user:{name:user.fullName??'我的账本'}});
+    return response({ledger:JSON.parse(payload),revision:row.revision,user});
   } catch(error) {console.error('ledger-load',error);return response({error:'暂时无法读取账本，请稍后重试'},503);}
 }
 export async function PUT(request: Request) {
-  const user=await getChatGPTUser();
+  const user=await cloudUser(request);
   if(!user)return response({error:'登录已失效，请重新登录'},401);
   const origin=request.headers.get('origin');
   if(!origin||origin!==new URL(request.url).origin)return response({error:'请求来源无效'},403);
-  let body: {ledger:unknown;revision:number};
+  let body: {ledger:unknown;revision:number;expectedUserId?:string};
   try {
     if(Number(request.headers.get('content-length'))>8_000_000)throw new Error('数据过大');
     const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>8_000_000)throw new Error('账本数据不能超过 8 MB，请先导出旧账单');
     body=JSON.parse(raw);
+    if(body.expectedUserId&&body.expectedUserId!==user.userId)return response({error:'云端账户已改变，请重新选择同步账本'},409);
     if(!Number.isSafeInteger(body.revision)||body.revision<0)throw new Error('版本号无效');
     validateLedger(body.ledger);
   } catch(error) {return response({error:error instanceof Error?error.message:'数据格式不正确'},400);}

@@ -1,0 +1,2 @@
+import { authBody, authFailure, authResponse, phoneService, sessionCookie, sessionToken, configuration } from '@/lib/phone-auth';
+export async function POST(request:Request){try{await authBody(request);if(configuration().secret.length>=32)await phoneService().logout(sessionToken(request.headers,request));return authResponse({ok:true},200,sessionCookie(request,'',0));}catch(error){return authFailure(error);}}

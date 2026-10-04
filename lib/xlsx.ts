@@ -1,7 +1,7 @@
 import { exportHeaders, exportRows, type Ledger, type Transaction } from './ledger';
 
 const encoder=new TextEncoder();
-const xml=(v:unknown)=>String(v).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const xml=(v:unknown)=>String(v).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFE\uFFFF]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function crc32(bytes:Uint8Array) {let crc=0xffffffff;for(const b of bytes){crc^=b;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;}
 function zip(files:Record<string,string>):Uint8Array {
   const chunks:Uint8Array[]=[],central:Uint8Array[]=[];let offset=0;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Plus, Trash2, Pencil, ChevronUp, ChevronDown, Check, Download, FileJson, Upload, Wallet, CreditCard, Banknote, Settings2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -14,14 +14,22 @@ import { xlsxExport } from '@/lib/xlsx';
 
 export type Commit = (next:Ledger,message?:string)=>Promise<boolean>;
 export function Picker({label,value,onChange,options,disabled=false}:{label:string;value:string;onChange:(value:string)=>void;options:{value:string;label:string}[];disabled?:boolean}) {
-  return <Select value={value} onValueChange={onChange} disabled={disabled}><SelectTrigger className="field-select" aria-label={label}><SelectValue placeholder="请选择" /></SelectTrigger><SelectContent>{options.map(o=><SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>;
+  return <Select value={value} onValueChange={v=>{if(options.some(o=>o.value===v))onChange(v);}} disabled={disabled}><SelectTrigger className="field-select" aria-label={label}><SelectValue placeholder="请选择">{options.find(o=>o.value===value)?.label??'请选择'}</SelectValue></SelectTrigger><SelectContent>{options.map(o=><SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>;
 }
 export function Field({label,children,hint}:{label:string;children:ReactNode;hint?:string}){return <div className="field"><div className="field-label">{label}</div>{children}{hint&&<small>{hint}</small>}</div>;}
-function ErrorText({error}:{error:string}){return error?<p className="form-error" role="alert">{error}</p>:null;}
-function Modal({open,onOpenChange,title,description,children,className=''}:{open:boolean;onOpenChange:(v:boolean)=>void;title:string;description?:string;children:ReactNode;className?:string}) {return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className={`ledger-modal ${className}`}><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description??'填写后保存到你的账本。'}</DialogDescription></DialogHeader>{children}</DialogContent></Dialog>;}
+function ErrorText({error}:{error:string}){
+  const message=useRef<HTMLParagraphElement>(null);
+  useEffect(()=>{if(error)message.current?.scrollIntoView({block:'nearest'});},[error]);
+  return error?<p ref={message} className="form-error" role="alert">{error}</p>:null;
+}
+function Modal({open,onOpenChange,title,description,children,className=''}:{open:boolean;onOpenChange:(v:boolean)=>void;title:string;description?:string;children:ReactNode;className?:string}) {
+  const [returnFocus]=useState(()=>typeof document==='undefined'?null:document.activeElement as HTMLElement|null);
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className={`ledger-modal ${className}`} onCloseAutoFocus={event=>{if(returnFocus?.isConnected&&returnFocus!==document.body){event.preventDefault();returnFocus.focus({preventScroll:true});}}}><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description??'填写后保存到你的账本。'}</DialogDescription></DialogHeader>{children}</DialogContent></Dialog>;
+}
 export function Confirm({title,description,onConfirm,onCancel,busy=false}:{title:string;description:string;onConfirm:()=>void;onCancel:()=>void;busy?:boolean}){return <AlertDialog open><AlertDialogContent className="ledger-confirm"><AlertDialogHeader><AlertDialogTitle>{title}</AlertDialogTitle><AlertDialogDescription>{description}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={busy} onClick={onCancel}>取消</AlertDialogCancel><button className="btn danger" disabled={busy} onClick={onConfirm}>{busy?'处理中…':'确认'}</button></AlertDialogFooter></AlertDialogContent></AlertDialog>;}
 
 export function EntryForm({s,entry,commit,busy,onClose}:{s:Ledger;entry:Transaction|null;commit:Commit;busy:boolean;onClose:()=>void}){
+  const amountInput=useRef<HTMLInputElement>(null),focusNextEntry=useRef(false);
   const [existing]=useState(()=>!!entry&&s.transactions.some(t=>t.id===entry.id));
   const defaultCategory=s.categories.find(c=>c.id==='food-lunch')??s.categories.find(c=>c.type==='expense'&&c.parentId);
   const [type,setType]=useState<EntryType>(entry?.type??'expense');
@@ -35,9 +43,10 @@ export function EntryForm({s,entry,commit,busy,onClose}:{s:Ledger;entry:Transact
   const [date,setDate]=useState(entry?.date??localDateTime());
   const [note,setNote]=useState(entry?.note??'');
   const [error,setError]=useState('');
+  useEffect(()=>{if(focusNextEntry.current&&!busy){focusNextEntry.current=false;amountInput.current?.focus();}},[amount,busy]);
   const parents=s.categories.filter(c=>c.type===type&&!c.parentId);
   const children=s.categories.filter(c=>c.parentId===parent);
-  function changeType(value:string){const next=value as EntryType;setType(next);setError('');if(next!=='transfer'){const p=s.categories.find(c=>!c.parentId&&c.type===next);setParent(p?.id??'');setCategory(s.categories.find(c=>c.parentId===p?.id)?.id??'');}}
+  function changeType(value:string){const next=value as EntryType;setType(next);setError('');if(next==='transfer'){chooseTransferSource(account);}else{const p=s.categories.find(c=>!c.parentId&&c.type===next);setParent(p?.id??'');setCategory(s.categories.find(c=>c.parentId===p?.id)?.id??'');}}
   function chooseParent(id:string){setParent(id);setCategory(s.categories.find(c=>c.parentId===id)?.id??'');}
   async function save(again:boolean){
     setError('');try{
@@ -47,15 +56,16 @@ export function EntryForm({s,entry,commit,busy,onClose}:{s:Ledger;entry:Transact
       if(feeValue>0&&!feeCategory)throw new Error('请创建一个支出小类用于记录手续费');
       const tx:Transaction={id:existing?entry!.id:crypto.randomUUID(),type,amount:value,fee:feeValue,accountId:account,toAccountId:type==='transfer'?toAccount:'',categoryId:type==='transfer'?(feeValue>0?feeCategory:''):category,date,note:note.trim(),createdAt:existing?entry!.createdAt:localDateTime()};
       const next={...s,transactions:existing?s.transactions.map(t=>t.id===entry!.id?tx:t):[...s.transactions,tx],settings:{...s.settings,defaultAccount:account}};
-      if(await commit(next,existing?'账单已更新':'记账成功')){if(again){setAmount('');setNote('');setFee('');}else onClose();}
+      if(await commit(next,existing?'账单已更新':'记账成功')){if(again){focusNextEntry.current=true;setAmount('');setNote('');setFee('');}else onClose();}
     }catch(e){setError(e instanceof Error?e.message:'保存失败');}
   }
   const available=s.accounts.filter(a=>!a.archived||a.id===entry?.accountId||a.id===entry?.toAccountId).map(a=>({value:a.id,label:a.name+(a.archived?'（已停用）':'')}));
+  function chooseTransferSource(id:string){setAccount(id);if(!available.some(a=>a.value===toAccount&&a.value!==id))setToAccount(available.find(a=>a.value!==id)?.value??'');}
   return <Modal open onOpenChange={v=>{if(!v&&!busy)onClose();}} title={existing?'编辑账单':entry?'复制记账':'记一笔'} description="每一笔小记录，都让生活更清晰。" className="entry-modal">
     <Tabs value={type} onValueChange={changeType}><TabsList className="type-tabs">{(['expense','income','transfer'] as EntryType[]).map(t=><TabsTrigger key={t} value={t} disabled={busy}>{typeLabels[t]}</TabsTrigger>)}</TabsList></Tabs>
     <form onSubmit={e=>{e.preventDefault();void save(false);}}><fieldset disabled={busy}>
-      <div className="amount-input"><span>¥</span><input autoFocus aria-label="金额" inputMode="decimal" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)} maxLength={12}/><span className="currency">CNY</span></div>
-      {type!=='transfer'?<><Field label="大类"><div className="category-grid">{parents.map(c=><button type="button" className={parent===c.id?'selected':''} key={c.id} onClick={()=>chooseParent(c.id)}>{c.name}</button>)}</div></Field><Field label="小类"><div className="chip-list">{children.map(c=><button type="button" key={c.id} className={`choice-chip ${category===c.id?'selected':''}`} onClick={()=>setCategory(c.id)}>{c.name}</button>)}{!children.length&&<small>请到分类管理中添加小类。</small>}</div></Field></>:<div className="form-grid"><Field label="转出账户"><Picker label="转出账户" value={account} onChange={setAccount} options={available}/></Field><Field label="转入账户"><Picker label="转入账户" value={toAccount} onChange={setToAccount} options={available.filter(a=>a.value!==account)}/></Field><Field label="手续费（可选）"><input aria-label="手续费" inputMode="decimal" value={fee} placeholder="0.00" onChange={e=>setFee(e.target.value)}/></Field><div className="field-hint">转账本金不计入收支，手续费计入支出。</div></div>}
+      <div className="amount-input"><span>¥</span><input ref={amountInput} autoFocus aria-label="金额" inputMode="decimal" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)} maxLength={12}/><span className="currency">CNY</span></div>
+      {type!=='transfer'?<><Field label="大类"><div className="category-grid">{parents.map(c=><button type="button" className={parent===c.id?'selected':''} key={c.id} onClick={()=>chooseParent(c.id)}>{c.name}</button>)}</div></Field><Field label="小类"><div className="chip-list">{children.map(c=><button type="button" key={c.id} className={`choice-chip ${category===c.id?'selected':''}`} onClick={()=>setCategory(c.id)}>{c.name}</button>)}{!children.length&&<small>请到分类管理中添加小类。</small>}</div></Field></>:<div className="form-grid"><Field label="转出账户"><Picker label="转出账户" value={account} onChange={chooseTransferSource} options={available}/></Field><Field label="转入账户"><Picker label="转入账户" value={toAccount} onChange={setToAccount} options={available.filter(a=>a.value!==account)}/></Field><Field label="手续费（可选）"><input aria-label="手续费" inputMode="decimal" value={fee} placeholder="0.00" onChange={e=>setFee(e.target.value)}/></Field><div className="field-hint">转账本金不计入收支，手续费计入支出。</div></div>}
       {type==='transfer'&&Number(fee)>0&&<Field label="手续费分类"><Picker label="手续费分类" value={feeCategory} onChange={setFeeCategory} options={s.categories.filter(c=>c.type==='expense'&&c.parentId).map(c=>({value:c.id,label:`${s.categories.find(p=>p.id===c.parentId)?.name} · ${c.name}`}))}/></Field>}
       <div className="form-grid">{type!=='transfer'&&<Field label="账户"><Picker label="账户" value={account} onChange={setAccount} options={available}/></Field>}<Field label="日期与时间"><input aria-label="日期与时间" type="datetime-local" required value={date} onChange={e=>setDate(e.target.value)}/></Field></div>
       <Field label="备注（可选）"><textarea aria-label="备注" placeholder="这笔钱，用在了哪里？" maxLength={2000} rows={2} value={note} onChange={e=>setNote(e.target.value)}/></Field><ErrorText error={error}/>
@@ -72,14 +82,16 @@ export function FilterForm({s,filter,onApply,onClose}:{s:Ledger;filter:Filter;on
   const quickRange=(kind:string)=>{const now=new Date(),today=localDateTime().slice(0,10);if(kind==='today')update({start:today,end:today});else if(kind==='month')update({start:today.slice(0,7)+'-01',end:today});else{now.setDate(now.getDate()-((now.getDay()+6)%7));update({start:localDateTime(now).slice(0,10),end:today});}};
   function apply(){try{if(f.start&&f.end&&f.start>f.end)throw new Error('开始日期不能晚于结束日期');if(f.amountOp&&f.amountOp!=='none'){if(!f.amountMin)throw new Error('请填写金额条件');const min=parseMoney(f.amountMin,true);if(f.amountOp==='range'){if(!f.amountMax)throw new Error('请填写区间上限');if(parseMoney(f.amountMax,true)<min)throw new Error('区间上限不能小于下限');}}onApply(f.amountOp==='none'?{...f,amountOp:'',amountMin:'',amountMax:''}:f);onClose();}catch(e){setError((e as Error).message);}}
   return <Modal open onOpenChange={v=>{if(!v)onClose();}} title="组合筛选" description="不同条件同时满足；同一项内可多选。" className="filter-modal">
-    <Field label="收支类型"><div className="chip-list">{(['expense','income','transfer'] as EntryType[]).map(t=><button key={t} className={`choice-chip ${f.types?.includes(t)?'selected':''}`} onClick={()=>toggle('types',t)}>{typeLabels[t]}</button>)}</div></Field>
+    <form className="filter-form" onSubmit={e=>{e.preventDefault();apply();}}>
+    <Field label="收支类型"><div className="chip-list">{(['expense','income','transfer'] as EntryType[]).map(t=><button type="button" key={t} className={`choice-chip ${f.types?.includes(t)?'selected':''}`} onClick={()=>toggle('types',t)}>{typeLabels[t]}</button>)}</div></Field>
     <Field label="金额"><div className="filter-amount"><Picker label="金额条件" value={f.amountOp||'none'} onChange={v=>update({amountOp:v})} options={[{value:'none',label:'不限'},{value:'eq',label:'等于'},{value:'gt',label:'大于'},{value:'lt',label:'小于'},{value:'range',label:'区间（含边界）'}]}/>{f.amountOp&&f.amountOp!=='none'&&<input aria-label="金额下限" placeholder="金额（元）" inputMode="decimal" value={f.amountMin??''} onChange={e=>update({amountMin:e.target.value})}/>} {f.amountOp==='range'&&<><span>至</span><input aria-label="金额上限" placeholder="上限（元）" inputMode="decimal" value={f.amountMax??''} onChange={e=>update({amountMax:e.target.value})}/></>}</div></Field>
-    <Field label="大类"><div className="chip-list">{parents.filter(c=>!f.types?.length||f.types.includes(c.type)).map(c=><button key={c.id} className={`choice-chip ${f.categoryIds?.includes(c.id)?'selected':''}`} onClick={()=>{const removing=f.categoryIds?.includes(c.id);setF({...f,categoryIds:removing?f.categoryIds?.filter(id=>id!==c.id):[...f.categoryIds??[],c.id],subIds:removing?f.subIds?.filter(id=>s.categories.find(x=>x.id===id)?.parentId!==c.id):f.subIds});}}>{c.name}</button>)}</div></Field>
-    {!!f.categoryIds?.length&&<Field label="小类（不选则包含该大类全部小类）"><div className="subcategory-filter">{parents.filter(c=>f.categoryIds?.includes(c.id)).map(p=><div key={p.id}><small>{p.name}</small><div className="chip-list">{s.categories.filter(c=>c.parentId===p.id).map(c=><button key={c.id} className={`choice-chip ${f.subIds?.includes(c.id)?'selected':''}`} onClick={()=>toggle('subIds',c.id)}>{c.name}</button>)}</div></div>)}</div></Field>}
+    <Field label="大类"><div className="chip-list">{parents.filter(c=>!f.types?.length||f.types.includes(c.type)).map(c=><button type="button" key={c.id} className={`choice-chip ${f.categoryIds?.includes(c.id)?'selected':''}`} onClick={()=>{const removing=f.categoryIds?.includes(c.id);setF({...f,categoryIds:removing?f.categoryIds?.filter(id=>id!==c.id):[...f.categoryIds??[],c.id],subIds:removing?f.subIds?.filter(id=>s.categories.find(x=>x.id===id)?.parentId!==c.id):f.subIds});}}>{c.name}</button>)}</div></Field>
+    {!!f.categoryIds?.length&&<Field label="小类（不选则包含该大类全部小类）"><div className="subcategory-filter">{parents.filter(c=>f.categoryIds?.includes(c.id)).map(p=><div key={p.id}><small>{p.name}</small><div className="chip-list">{s.categories.filter(c=>c.parentId===p.id).map(c=><button type="button" key={c.id} className={`choice-chip ${f.subIds?.includes(c.id)?'selected':''}`} onClick={()=>toggle('subIds',c.id)}>{c.name}</button>)}</div></div>)}</div></Field>}
     <Field label="备注关键词"><div className="form-grid"><input aria-label="备注关键词" value={f.note??''} placeholder="多个关键词用空格分隔" onChange={e=>update({note:e.target.value})}/><Picker label="关键词匹配" value={f.noteMode??'all'} onChange={v=>update({noteMode:v})} options={[{value:'all',label:'全部包含'},{value:'any',label:'任一包含'}]}/></div></Field>
-    <Field label="时间范围"><div className="chip-list quick-dates">{[['today','今天'],['week','本周'],['month','本月']].map(([id,name])=><button key={id} className="choice-chip" onClick={()=>quickRange(id)}>{name}</button>)}</div><div className="form-grid"><input aria-label="开始日期" type="date" value={f.start??''} onChange={e=>update({start:e.target.value})}/><input aria-label="结束日期" type="date" value={f.end??''} onChange={e=>update({end:e.target.value})}/></div></Field>
-    <Field label="账户"><div className="chip-list">{s.accounts.map(a=><button key={a.id} className={`choice-chip ${f.accountIds?.includes(a.id)?'selected':''}`} onClick={()=>toggle('accountIds',a.id)}>{a.name}</button>)}</div>{!!f.accountIds?.length&&<Picker label="账户方向" value={f.accountMode??'any'} onChange={v=>update({accountMode:v})} options={[{value:'any',label:'涉及账户（包含转入与转出）'},{value:'out',label:'记账账户 / 转出账户'},{value:'in',label:'仅转入账户'}]}/>}</Field>
-    <ErrorText error={error}/><div className="form-actions"><button className="btn secondary" onClick={()=>{setF({});setError('');}}>重置条件</button><button className="btn primary" onClick={apply}>查看结果</button></div>
+    <Field label="时间范围"><div className="chip-list quick-dates">{[['today','今天'],['week','本周'],['month','本月']].map(([id,name])=><button type="button" key={id} className="choice-chip" onClick={()=>quickRange(id)}>{name}</button>)}</div><div className="form-grid"><input aria-label="开始日期" type="date" value={f.start??''} onChange={e=>update({start:e.target.value})}/><input aria-label="结束日期" type="date" value={f.end??''} onChange={e=>update({end:e.target.value})}/></div></Field>
+    <Field label="账户"><div className="chip-list">{s.accounts.map(a=><button type="button" key={a.id} className={`choice-chip ${f.accountIds?.includes(a.id)?'selected':''}`} onClick={()=>toggle('accountIds',a.id)}>{a.name}</button>)}</div>{!!f.accountIds?.length&&<Picker label="账户方向" value={f.accountMode??'any'} onChange={v=>update({accountMode:v})} options={[{value:'any',label:'涉及账户（包含转入与转出）'},{value:'out',label:'记账账户 / 转出账户'},{value:'in',label:'仅转入账户'}]}/>}</Field>
+    <ErrorText error={error}/><div className="form-actions"><button type="button" className="btn secondary" onClick={()=>{setF({});setError('');}}>重置条件</button><button type="submit" className="btn primary">查看结果</button></div>
+    </form>
   </Modal>;
 }
 

@@ -56,3 +56,11 @@ test('large Unicode payload chunks round trip without broken surrogate pairs',()
   assert.equal(splitPayload('🙂简账🙂',3).join(''),'🙂简账🙂');
   chunks.forEach(c=>assert.ok(new TextEncoder().encode(c).length<500000));
 });
+
+test('backup rejects coerced month/color types before they can disappear in the UI',()=>{
+  const state=initialLedger();
+  state.budgets=[{month:'2026-10',categoryId:'',amount:10000,threshold:80}];
+  assert.throws(()=>validateLedger({...state,budgets:[{...state.budgets[0],month:['2026-10']}]}));
+  assert.throws(()=>validateLedger({...state,categories:state.categories.map((c,i)=>i?c:{...c,color:['#123456']})}));
+  assert.doesNotThrow(()=>validateLedger(state));
+});

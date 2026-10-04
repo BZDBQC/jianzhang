@@ -142,7 +142,7 @@ export function validateLedger(raw: unknown): asserts raw is Ledger {
   const name=(n:string)=>typeof n==='string'&&n.trim().length>0&&n.length<=60;
   s.accounts.forEach(a=>{if(!name(a.name)||!cents(a.openingBalance)||typeof a.kind!=='string'||typeof a.archived!=='boolean')fail('账户数据无效');});
   s.categories.forEach(c=>{
-    if(!name(c.name)||!['expense','income'].includes(c.type)||typeof c.icon!=='string'||!/^#[0-9a-fA-F]{6}$/.test(c.color))fail('分类数据无效');
+    if(!name(c.name)||!['expense','income'].includes(c.type)||typeof c.icon!=='string'||typeof c.color!=='string'||!/^#[0-9a-fA-F]{6}$/.test(c.color))fail('分类数据无效');
     if(c.parentId!==null) {const p=s.categories.find(p=>p.id===c.parentId);if(!p||p.parentId!==null||p.type!==c.type||p.id===c.id)fail('分类必须是两级结构');}
   });
   s.transactions.forEach(t=>{
@@ -151,6 +151,6 @@ export function validateLedger(raw: unknown): asserts raw is Ledger {
     else {const c=s.categories.find(c=>c.id===t.categoryId);if(!c||c.parentId===null||c.type!==t.type||t.fee!==0||t.toAccountId!=='')fail('账单分类无效');}
   });
   const budgetKeys=new Set<string>();
-  s.budgets.forEach(b=>{const key=`${b.month}:${b.categoryId}`;const c=s.categories.find(c=>c.id===b.categoryId);if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(b.month)||!cents(b.amount,true)||![50,80,90,100].includes(b.threshold)||b.categoryId!==''&&(!cIds.has(b.categoryId)||c?.parentId!==null||c.type!=='expense')||budgetKeys.has(key))fail('预算数据无效');budgetKeys.add(key);});
+  s.budgets.forEach(b=>{const key=`${b.month}:${b.categoryId}`;const c=s.categories.find(c=>c.id===b.categoryId);if(typeof b.month!=='string'||!/^\d{4}-(0[1-9]|1[0-2])$/.test(b.month)||!cents(b.amount,true)||![50,80,90,100].includes(b.threshold)||b.categoryId!==''&&(!cIds.has(b.categoryId)||c?.parentId!==null||c.type!=='expense')||budgetKeys.has(key))fail('预算数据无效');budgetKeys.add(key);});
   if(!s.settings||!aIds.has(s.settings.defaultAccount)||typeof s.settings.notifications!=='boolean'||!Array.isArray(s.settings.notified)||s.settings.notified.length>2000||!s.settings.notified.every(n=>typeof n==='string'&&n.length<=180))fail('设置数据无效');
 }

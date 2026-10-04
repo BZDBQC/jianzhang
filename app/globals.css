@@ -20,3 +20,5 @@
 @media(min-width:721px) and (max-height:800px){.sidebar-note{display:none}}
 
 .ledger-modal fieldset{border:0;padding:0;margin:0;min-width:0}
+.filter-form,.saved-filter-form{display:grid;gap:16px;min-width:0}
+.trend-chart .recharts-wrapper,.trend-chart .recharts-surface{max-width:100%}

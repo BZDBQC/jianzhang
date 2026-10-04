@@ -21,4 +21,4 @@
 
 .ledger-modal fieldset{border:0;padding:0;margin:0;min-width:0}
 .filter-form,.saved-filter-form{display:grid;gap:16px;min-width:0}
-.trend-chart .recharts-wrapper,.trend-chart .recharts-surface{max-width:100%}
+.trend-chart .recharts-responsive-container{overflow:hidden}

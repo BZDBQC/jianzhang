@@ -58,6 +58,66 @@ void main() {
   );
 
   test(
+    'save acknowledgement does not read after the database commit',
+    () async {
+      final before = await repository.meta();
+      await repository.close();
+      repository = await SqliteLedgerRepository.connect(
+        path: '${directory.path}/ledger.db',
+        afterRead: (sql) async {
+          if (sql == 'SELECT sequence FROM workspaces WHERE key=?' &&
+              (audit
+                          .select(
+                            "SELECT sequence FROM workspaces WHERE key='guest'",
+                          )
+                          .single['sequence']
+                      as int) >
+                  before.sequence) {
+            throw StateError('Injected read failure after committed save');
+          }
+        },
+      );
+      await repository.saveTransaction(entry('acknowledged'), create: true);
+      expect(
+        audit.select("SELECT id FROM entries WHERE id='acknowledged'"),
+        hasLength(1),
+      );
+    },
+  );
+
+  test('revision read failure rolls back the bill and sequence', () async {
+    final before = await repository.meta();
+    await repository.close();
+    repository = await SqliteLedgerRepository.connect(
+      path: '${directory.path}/ledger.db',
+      afterRead: (sql) async {
+        if (sql == 'SELECT sequence FROM workspaces WHERE key=?') {
+          throw StateError('Injected revision read failure');
+        }
+      },
+    );
+    final revisions = <int>[];
+    final subscription = repository.changes.listen(revisions.add);
+    await expectLater(
+      repository.saveTransaction(entry('rolled-back'), create: true),
+      throwsStateError,
+    );
+    expect(
+      audit.select("SELECT id FROM entries WHERE id='rolled-back'"),
+      isEmpty,
+    );
+    expect(
+      audit
+          .select("SELECT sequence FROM workspaces WHERE key='guest'")
+          .single['sequence'],
+      before.sequence,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(revisions, isEmpty);
+    await subscription.cancel();
+  });
+
+  test(
     'CAS edit reads only sequence and emits its committed revision',
     () async {
       await repository.saveTransaction(entry('one'), create: true);

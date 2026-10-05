@@ -175,3 +175,20 @@ Windows R17 actual installer regression: 47/47 passed; QA setup SHA 227b8411e5ca
 - API35 UI真实检查首次离线、支出/收入/转账及手续费、关闭重开三笔保留、账单列表、横屏、字体放大、键盘、返回撤销草稿；16份截屏证据 `.qa/android-ui-r17-api35/evidence.json`。系统设置清理无错误。
 - 新默认渲染配置性能 profile 编译476.6s未完成，取消已核对本任务的Gradle client6036及只读jstack helper16172，保留失败日志及 `.qa/android-profile-r17-stall.json`。官方 Gradle stop 无运行daemon；随后使用 `--no-android-gradle-daemon` 和进程内Kotlin策略重试，仅改变构建进程策略，不改变生产源码或运行配置。
 - 尚无 R17 实际100k性能结论、完整安卓矩阵或正式干净轮次，仍 **0/3**。API37应用启动前图形故障未解决；Windows10/安卓真机/真实短信边界不变。
+
+## 2026-10-06 R17 默认渲染性能与 R18 单变量实验
+
+- 正常配置、默认Impeller、不启用phase trace的R17实际profile两项测试exit0；五份原始已设备/主机SHA校验归档 `.qa/android-performance-r17`。30次保存p95=238.713ms、筛选p95=229.12ms达标，695帧中87帧>50ms=12.5179856%未达标；三格式100k导出恢复成功、主事件循环最大gap47.756ms。不能用测试进程exit0代替性能门槛。
+- 完全同一APK/source/runtime复测原始另存 `.qa/android-performance-r17-repeat`：保存p95=284.157ms、筛选192.481ms、611帧中4长帧=0.6546645%。首轮失败原样保留，两次差异尚未归因，不能只保留好结果宣称稳定达标。
+- R17 profile APK SHA `3cad4c3fa5302cf390f2b9f71d3851e6696bd266c68a269754cad470035053bb` 与基线UI源码已独立冻结。R18仅BillsPage分隔线不再单独RepaintBoundary，账单行仍保留，布局/高度/分页/默认renderer/SQL/基准协议与门槛不变。源码Android合同 `50e68310a5a16e28bdf8de037f4c7e9a621d8c0f82c82af08d7f1681c20b25e7`；97项UI回归实际通过，独立复审/实际性能对照待完成；生产APK/EXE仍R17，未发布该实验修改。仍0/3正式轮次。
+- Profile多架构构建慢已由真实下载FileStream增长确认，诊断报告 `docs/native-profile-build-diagnosis-r17.md`；不是已证实死锁。仅x64性能测试包99.6s实际成功，正式全架构release不变。
+
+## 2026-10-06 R19 保存提交确认修复（验收未完成）
+
+- R18 分隔线边界实验实际保存 p95=334.638ms、长帧8/590=1.3559322%，均未达标；已仅撤回该实验，界面源码恢复基线 SHA a57d14dfa9e75a84b6e12729eb724d0c878138b31022ee679c816b693e49e3e1。实验源码、APK和五份原始证据保留在 `.qa/android-performance-r18`。
+- 同一 R17 APK 的无追踪 Skia 运行对照保存 p95=325.536ms、查询249.52ms、长帧12/582=2.0618557%，不能证明切换渲染器有益；生产配置未变。证据 `.qa/android-skia-untraced-r19b` 明确 comparisonOnly，不用于正式验收；第一次归档因 PowerShell保留变量命名失败，空目录保留。
+- 只读审查发现 `_mutate` 提交后读取 sequence 可以误报保存失败。实际注入回归 `.qa/postcommit-ack-red.log` 复现；现将版本读取移入同一事务，读取失败可回滚，提交后仅通知已捕获的版本号。首次相关19项回归通过，增加读取失败回滚/无通知回归后10项 SQL 成本回归通过，全面测试和独立审查进行中。不能把测试注入称为已发生的用户丢账。
+- 此行为修复使后续安装包需要重建和复测；R17 APK/EXE仍是旧候选。正式干净轮次仍0/3，API37启动前图形故障、完整系统矩阵与稳定性能尚未验收。
+- R19提交确认修复独立审查 APPROVE（`docs/native-iteration-review-round19-commit-ack.md`）；全量181/181通过、analyze无问题。Windows构建49.6s、Android全ABI正式构建138.0s通过。新APK SHA `0f26253b294df49b2bd41df14d2e202587d24acf08a464293379b17435cd11bc`，新Windows安装器 SHA `d8c750018fa059018cc1bbbf5550c3b9243e5d9a4e9b61dd17a75888ff8f179f`，均为未完成验收候选。
+- 已校验并归档原R17 APK/EXE到 `.qa/r17-candidate-preserved`；正常目录78份新版源码/完整Windows负载逐字节SHA核对复制，不更改ACL，登记 `normal-r19-copy-records.json`。R19正常目录安装故障回归运行中。
+- API35仅移除已归档且已核对SHA的本任务诊断profile包，先安装原R17正式证书APK，再用 `install -r` 覆盖R19成功；此步仅证明同签名覆盖，未种入数据、不宣称升级保留账本。R19真实界面回归运行中，20次冷启动尚待。

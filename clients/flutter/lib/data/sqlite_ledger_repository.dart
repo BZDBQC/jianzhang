@@ -349,13 +349,15 @@ abstract class _RepositoryCore extends LedgerRepository {
         [_workspace == 'guest' ? 0 : 1, _workspace],
       );
       await _commitHook?.call('save');
-      return result;
+      // Capture the revision while failures can still roll back the write.
+      // A read after commit must not turn a successful save into a failure.
+      return (result, await _sequence());
     });
-    _events.add(await _sequence());
+    _events.add(result.$2);
     for (final notice in notices) {
       _budgetEvents.add(notice);
     }
-    return result;
+    return result.$1;
   });
   Future<List<String>> _notifyBudgets() async {
     final preferences = await settings();

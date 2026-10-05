@@ -73,6 +73,23 @@ test('acceptance requires real, independent evidence and recomputes every measur
     assert.equal(verifyAcceptance(sameConfiguration).accepted, true);
     rejected(r => { r.rounds[0].metrics.windowsSave100kP95Ms.rawEvidence = write('wrong-config-hash.json', {metric: 'windowsSave100kP95Ms', roundId: 'unit-0', buildId: 'synthetic-only', mode: 'release', configurationSha256: 'f'.repeat(64), samples: Array(20).fill(10)}); });
     rejected(r => { r.rounds[0].metrics.windowsSave100kP95Ms.samples = 'not-measured'; });
+    for (const diagnosticRun of [true, 'false', null, 1]) {
+      rejected(r => {
+        const metric = r.rounds[0].metrics.androidSave100kP95Ms;
+        const raw = JSON.parse(fs.readFileSync(metric.rawEvidence, 'utf8'));
+        metric.rawEvidence = write(`diagnostic-save-${String(diagnosticRun)}.json`, {...raw, diagnosticRun});
+        metric.evidence = [metric.rawEvidence];
+      });
+    }
+    const explicitNormal = structuredClone(report);
+    for (const round of explicitNormal.rounds) {
+      for (const metric of Object.values(round.metrics)) {
+        const raw = JSON.parse(fs.readFileSync(metric.rawEvidence, 'utf8'));
+        metric.rawEvidence = write(`${round.roundId}-${raw.metric}-not-diagnostic.json`, {...raw, diagnosticRun: false});
+        metric.evidence = [metric.rawEvidence];
+      }
+    }
+    assert.equal(verifyAcceptance(explicitNormal).accepted, true);
     rejected(r => { delete r.rounds[0].metrics.androidSave100kP95Ms; });
     rejected(r => { delete r.rounds[0].metrics.androidScrollFramesOver50msRatio; });
     const profile = structuredClone(report);

@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart'
     show
         visibleForTesting,
         compute,
+        listEquals,
         FlutterError,
         FlutterErrorDetails,
         ErrorDescription;
@@ -323,11 +324,15 @@ abstract class _RepositoryCore extends LedgerRepository {
     if (expectedWorkspace != null && _workspace != expectedWorkspace) {
       throw const LedgerConflict();
     }
-    if (expectedSequence != null &&
-        (await meta()).sequence != expectedSequence) {
+    if (expectedSequence != null && (await _sequence()) != expectedSequence) {
       throw const LedgerConflict();
     }
   }
+
+  Future<int> _sequence() async => (await _one(
+    'SELECT sequence FROM workspaces WHERE key=?',
+    [_workspace],
+  )).read<int>('sequence');
 
   Future<T> _mutate<T>(
     Future<T> Function() action, {
@@ -346,7 +351,7 @@ abstract class _RepositoryCore extends LedgerRepository {
       await _commitHook?.call('save');
       return result;
     });
-    _events.add((await meta()).sequence);
+    _events.add(await _sequence());
     for (final notice in notices) {
       _budgetEvents.add(notice);
     }
@@ -357,10 +362,11 @@ abstract class _RepositoryCore extends LedgerRepository {
     if (!preferences.notifications) return [];
     final notified = preferences.notified.toSet();
     final notices = <String>[];
-    final names = {for (final c in await listCategories()) c.id: c.name};
-    for (final status in await budgetStatuses(
-      localDateTime().substring(0, 7),
-    )) {
+    final statuses = await budgetStatuses(localDateTime().substring(0, 7));
+    final names = statuses.isEmpty
+        ? const <String, String>{}
+        : {for (final c in await listCategories()) c.id: c.name};
+    for (final status in statuses) {
       final b = status.budget;
       for (final threshold in {b.threshold, 100}) {
         if (status.spent * 100 >= b.amount * threshold &&
@@ -373,10 +379,12 @@ abstract class _RepositoryCore extends LedgerRepository {
     }
     final list = notified.toList();
     if (list.length > 2000) list.removeRange(0, list.length - 2000);
-    await _db.customStatement('UPDATE workspaces SET settings=? WHERE key=?', [
-      jsonEncode(preferences.copyWith(notified: list).toJson()),
-      _workspace,
-    ]);
+    if (!listEquals(list, preferences.notified)) {
+      await _db.customStatement(
+        'UPDATE workspaces SET settings=? WHERE key=?',
+        [jsonEncode(preferences.copyWith(notified: list).toJson()), _workspace],
+      );
+    }
     return notices;
   }
 

@@ -158,6 +158,8 @@ mixin _RepositoryQueries on _RepositoryCore {
   @override
   String get _join =>
       'FROM entries t LEFT JOIN categories c ON c.ws=t.ws AND c.id=t.category_id';
+  String _queryFrom(LedgerFilter filter) =>
+      filter.categoryIds.isEmpty ? 'FROM entries t' : _join;
   @override
   Future<TransactionPage> search(
     LedgerFilter filter, {
@@ -171,12 +173,13 @@ mixin _RepositoryQueries on _RepositoryCore {
         throw const LedgerException('分页参数无效');
       }
       final w = await _where(filter);
+      final from = _queryFrom(filter);
       final total = (await _one(
-        'SELECT COUNT(*) AS n $_join WHERE ${w.sql}',
+        'SELECT COUNT(*) AS n $from WHERE ${w.sql}',
         w.args,
       )).read<int>('n');
       final rows = await _rows(
-        'SELECT t.* $_join WHERE ${w.sql} ORDER BY t.date DESC,t.position ASC,t.id ASC LIMIT ? OFFSET ?',
+        'SELECT t.* $from WHERE ${w.sql} ORDER BY t.date DESC,t.position ASC,t.id ASC LIMIT ? OFFSET ?',
         [...w.args, limit, offset],
       );
       return TransactionPage(
@@ -195,8 +198,9 @@ mixin _RepositoryQueries on _RepositoryCore {
     LedgerFilter filter = const LedgerFilter(),
   }) => _readSnapshot(() async {
     final w = await _where(filter);
+    final from = _queryFrom(filter);
     final r = await _one(
-      "SELECT COALESCE(SUM(CASE WHEN t.type='income' THEN t.amount ELSE 0 END),0) AS income,COALESCE(SUM(CASE WHEN t.type='expense' THEN t.amount WHEN t.type='transfer' THEN t.fee ELSE 0 END),0) AS expense,COUNT(*) AS n $_join WHERE ${w.sql}",
+      "SELECT COALESCE(SUM(CASE WHEN t.type='income' THEN t.amount ELSE 0 END),0) AS income,COALESCE(SUM(CASE WHEN t.type='expense' THEN t.amount WHEN t.type='transfer' THEN t.fee ELSE 0 END),0) AS expense,COUNT(*) AS n $from WHERE ${w.sql}",
       w.args,
     );
     return LedgerSummary(

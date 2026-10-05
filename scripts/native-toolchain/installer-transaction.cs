@@ -307,7 +307,71 @@ namespace JianzhangInstaller {
         FileBoundary("journal.beforeWrite"); stream.Write(bytes,0,bytes.Length);
         FileBoundary("journal.beforeFlush"); stream.Flush(true); FileBoundary("journal.afterFlush");
       }
-      if(File.Exists(path)) File.Replace(temporary,path,null); else File.Move(temporary,path);
+      PublishJournal(temporary,path,"journal.beforeReplace");
+    }
+    static int? PublicationNativeError(Exception error) {
+      var native=error as Win32Exception;
+      if(native!=null) return native.NativeErrorCode;
+      uint value=unchecked((uint)error.HResult);
+      return (value&0xFFFF0000u)==0x80070000u?(int?)(value&0xFFFFu):null;
+    }
+    static void CheckPublicationPath(string path) {
+      CheckAncestors(Path.GetDirectoryName(path));
+      FileAttributes attributes;
+      try { attributes=File.GetAttributes(path); }
+      catch(FileNotFoundException) { return; }
+      catch(DirectoryNotFoundException) { return; }
+      if((attributes&FileAttributes.ReparsePoint)!=0) throw new IOException("恢复日志位置不能是链接："+path);
+      if((attributes&FileAttributes.Directory)!=0) throw new IOException("恢复日志位置被目录占用："+path);
+    }
+    static IOException PublicationFailure(Exception error,string operation,string source,string target,int attempt,int maximum,Exception diagnosticError) {
+      int? native=PublicationNativeError(error);
+      string details="安装恢复日志发布失败。 Operation="+operation+" Source="+source+" Target="+target+" Attempt="+attempt+"/"+maximum+" HResult=0x"+unchecked((uint)error.HResult).ToString("X8")+" NativeError="+(native.HasValue?native.Value.ToString():"unavailable")+" "+error.Message;
+      if(diagnosticError!=null) details+="; QA diagnostic write failure: HResult=0x"+unchecked((uint)diagnosticError.HResult).ToString("X8")+" "+diagnosticError.Message;
+      var failure=new IOException(details,error);
+      if(diagnosticError!=null) failure.Data["QA diagnostic error"]=diagnosticError;
+      return failure;
+    }
+#if INSTALLER_QA
+    static Exception RecordPublicationFailure(Exception error,string operation,string source,string target,int attempt,int maximum,bool retry) {
+      try {
+        if(config==null||String.IsNullOrEmpty(config.qaRoot)) throw new IOException("QA diagnostic root is unavailable.");
+        string path=Path.Combine(Full(config.qaRoot),"journal-publication-errors.jsonl");
+        CheckPublicationPath(path);
+        var record=new {utc=DateTime.UtcNow.ToString("o"),operation=operation,source=source,target=target,attempt=attempt,maximum=maximum,retry=retry,exceptionType=error.GetType().FullName,hresult="0x"+unchecked((uint)error.HResult).ToString("X8"),nativeError=PublicationNativeError(error),message=error.Message};
+        File.AppendAllText(path,Json.Serialize(record)+"\r\n",Encoding.UTF8);
+        return null;
+      } catch(IOException diagnosticError) { return diagnosticError; }
+        catch(UnauthorizedAccessException diagnosticError) { return diagnosticError; }
+        catch(Win32Exception diagnosticError) { return diagnosticError; }
+    }
+#endif
+    static void PublishJournal(string temporary,string path,string boundary) {
+      // Fix the publication operation before retrying. A partial replacement
+      // must never be converted into an initial move or delete the old journal.
+      bool replace=File.Exists(path); int maximum=replace?5:1;
+      for(int attempt=1;attempt<=maximum;attempt++) {
+        string operation="ValidateJournalPaths";
+        try {
+          CheckPublicationPath(temporary); CheckPublicationPath(path);
+          operation=replace?"File.Replace":"File.Move";
+          if(replace) { FileBoundary(boundary); File.Replace(temporary,path,null); }
+          else File.Move(temporary,path);
+          return;
+        } catch(Exception error) {
+          if(!(error is IOException)&&!(error is UnauthorizedAccessException)&&!(error is Win32Exception)) throw;
+          int? native=PublicationNativeError(error);
+          bool fromWin32=(unchecked((uint)error.HResult)&0xFFFF0000u)==0x80070000u;
+          bool retry=operation=="File.Replace"&&fromWin32&&native.HasValue&&(native.Value==32||native.Value==33||native.Value==1175)&&attempt<maximum&&File.Exists(temporary)&&File.Exists(path);
+          Exception diagnosticError=null;
+#if INSTALLER_QA
+          diagnosticError=RecordPublicationFailure(error,operation,temporary,path,attempt,maximum,retry);
+#endif
+          if(!retry||diagnosticError!=null) throw PublicationFailure(error,operation,temporary,path,attempt,maximum,diagnosticError);
+          Thread.Sleep(40<<(attempt-1)); // Four waits sum to 600 ms at most.
+        }
+      }
+      throw new InvalidOperationException("Journal publication exceeded its fixed attempt limit.");
     }
     static void PublishInitialJournal() {
       // This unpublished sibling can contain only the initial journal. A crash
@@ -469,7 +533,7 @@ namespace JianzhangInstaller {
     static void SaveUninstallRecord(string path,UninstallRecord record) {
       string temporary=path+".new"; byte[] bytes=Encoding.UTF8.GetBytes(Json.Serialize(record));
       using(var file=new FileStream(temporary,FileMode.Create,FileAccess.Write,FileShare.None,4096,FileOptions.WriteThrough)) { file.Write(bytes,0,bytes.Length); file.Flush(true); }
-      if(File.Exists(path)) File.Replace(temporary,path,null); else File.Move(temporary,path);
+      PublishJournal(temporary,path,"uninstall.journal.beforeReplace");
     }
     static void BeginUninstall() {
       CheckUninstallOwnership(); if(Directory.Exists(UninstallRoot())) return;

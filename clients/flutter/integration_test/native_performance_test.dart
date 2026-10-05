@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:jianzhang/app/controller.dart';
 import 'package:jianzhang/data/ledger_repository.dart';
+import 'package:jianzhang/data/sqlite_ledger_repository.dart';
 import 'package:jianzhang/main.dart';
 import 'package:jianzhang/ui/ledger_pages.dart';
 import 'package:path/path.dart' as p;
@@ -28,6 +29,7 @@ const buildId = String.fromEnvironment(
 const configurationSha256 = String.fromEnvironment(
   'JIANZHANG_QA_CONFIGURATION_SHA256',
 );
+const tracePhases = bool.fromEnvironment('JIANZHANG_QA_TRACE_PHASES');
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -48,7 +50,26 @@ void main() {
     ).create(recursive: true);
     final fixture = await parent.createTemp('run-');
     final dbPath = p.join(fixture.path, 'ledger.sqlite');
-    final repository = await LedgerRepository.open(path: dbPath);
+    final traceClock = Stopwatch()..start();
+    final readTrace = <Map<String, Object?>>[];
+    var traceReads = false;
+    var foregroundOperation = '';
+    var saveSample = -1;
+    final repository = await SqliteLedgerRepository.connect(
+      path: dbPath,
+      afterRead: tracePhases
+          ? (sql) async {
+              if (traceReads) {
+                readTrace.add({
+                  'atUs': traceClock.elapsedMicroseconds,
+                  'foregroundOperation': foregroundOperation,
+                  'sample': saveSample,
+                  'sql': sql,
+                });
+              }
+            }
+          : null,
+    );
     final capture = GlobalKey();
     final ioActive = ValueNotifier(false);
     final responsiveness = <String, Object?>{};
@@ -267,12 +288,16 @@ void main() {
       reason: 'Restore must yield to the UI event loop',
     );
     final saveMs = <double>[], queryMs = <double>[];
+    traceReads = tracePhases;
     for (var sample = 0; sample < 30; sample++) {
+      saveSample = sample;
+      foregroundOperation = 'save';
       final clock = Stopwatch()..start();
       await repository.saveTransaction(
         row(sample * 997, note: '编辑 $sample 中文'),
       );
       saveMs.add(clock.elapsedMicroseconds / 1000);
+      foregroundOperation = 'search';
       clock.reset();
       final filter = sample.isEven
           ? const LedgerFilter(note: '中文')
@@ -290,6 +315,7 @@ void main() {
       expect((await repository.search(filter)).items, isNotEmpty);
       queryMs.add(clock.elapsedMicroseconds / 1000);
     }
+    traceReads = false;
     await tester.pumpAndSettle();
     await tester.tap(find.text('账单').last);
     await tester.pumpAndSettle();
@@ -304,15 +330,33 @@ void main() {
     final position = tester.state<ScrollableState>(scrollable).position;
     expect(position.maxScrollExtent, greaterThan(0));
     var movedFlings = 0;
+    var flingIndex = -1;
+    final framePhases = <List<int>>[];
     void timings(List<ui.FrameTiming> values) {
       frameMs.addAll(
         values.map((value) => value.totalSpan.inMicroseconds / 1000),
       );
+      if (tracePhases) {
+        for (final value in values) {
+          framePhases.add([
+            flingIndex,
+            value.timestampInMicroseconds(ui.FramePhase.vsyncStart),
+            value.timestampInMicroseconds(ui.FramePhase.buildStart),
+            value.timestampInMicroseconds(ui.FramePhase.buildFinish),
+            value.timestampInMicroseconds(ui.FramePhase.rasterStart),
+            value.timestampInMicroseconds(ui.FramePhase.rasterFinish),
+            value.buildDuration.inMicroseconds,
+            value.rasterDuration.inMicroseconds,
+            value.totalSpan.inMicroseconds,
+          ]);
+        }
+      }
     }
 
     SchedulerBinding.instance.addTimingsCallback(timings);
     try {
       for (var index = 0; index < 12; index++) {
+        flingIndex = index;
         final before = position.pixels;
         await tester.fling(
           scrollable,
@@ -342,6 +386,7 @@ void main() {
             'buildId': buildId,
             'mode': mode,
             'configurationSha256': configurationSha256,
+            'diagnosticRun': tracePhases,
             'samples': samples,
           }),
           flush: true,
@@ -350,6 +395,47 @@ void main() {
     await writeMetric('${platform}Save100kP95Ms', saveMs);
     await writeMetric('${platform}Query100kP95Ms', queryMs);
     await writeMetric('${platform}ScrollFramesOver50msRatio', frameMs);
+    if (tracePhases) {
+      expect(framePhases.length, frameMs.length);
+      await File(
+        p.join(artifacts.path, '$platform-phase-diagnostics.json'),
+      ).writeAsString(
+        jsonEncode({
+          'roundId': roundId,
+          'buildId': buildId,
+          'mode': mode,
+          'configurationSha256': configurationSha256,
+          'diagnosticRun': true,
+          'readTraceMeaning':
+              'SQL result callback timestamps; gaps include all work '
+              'between callbacks, and are not isolated SQL durations. '
+              'Foreground labels do not identify background refresh owners.',
+          'readTrace': readTrace,
+          'readTraceClockMeaning':
+              'Stopwatch elapsed microseconds since before repository '
+              'connection; not calibrated against the engine clock.',
+          'frameClockMeaning':
+              'Engine timestamps share an arbitrary epoch within frames. '
+              'Do not subtract these from readTrace.atUs or DateTime.',
+          'frameColumns': [
+            'callbackFlingIndex',
+            'vsyncStartUs',
+            'buildStartUs',
+            'buildFinishUs',
+            'rasterStartUs',
+            'rasterFinishUs',
+            'buildDurationUs',
+            'rasterDurationUs',
+            'totalSpanUs',
+          ],
+          'flingIndexMeaning':
+              'Fling active when a batch callback arrives; Flutter may '
+              'deliver timings for earlier frames in that batch.',
+          'frames': framePhases,
+        }),
+        flush: true,
+      );
+    }
     debugPrint('jianzhang.performance_stage=measurements persisted');
     final exports = <String, Object?>{};
     for (final format in ExportFormat.values) {
@@ -400,6 +486,7 @@ void main() {
         'buildId': buildId,
         'mode': mode,
         'configurationSha256': configurationSha256,
+        'diagnosticRun': tracePhases,
         'exports': exports,
         'responsiveness': responsiveness,
         'movedFlings': movedFlings,

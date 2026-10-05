@@ -9,6 +9,8 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using System.Web.Script.Serialization;
 using Microsoft.Win32.SafeHandles;
 
 namespace JianzhangInstaller {
@@ -38,6 +40,136 @@ namespace JianzhangInstaller {
       return state;
     }
     static void AssertOld(Journal state) { Invoke("CheckFiles",state.install,state.oldFiles,true); }
+    sealed class JournalFixture {
+      internal Journal state;
+      internal UninstallRecord uninstall;
+      internal string path, boundary, oldHash;
+      internal PayloadFile[] payload;
+      internal JournalFixture(string root,bool removing) {
+        if(removing) {
+          state=SeedOwned(root); Invoke("BeginUninstall");
+          uninstall=(UninstallRecord)Invoke("ReadUninstallRecord");
+          path=Path.Combine(state.install+".__jianzhang_uninstall","journal.json");
+          boundary="uninstall.journal.beforeReplace";
+          uninstall.phase="Completed";
+        } else {
+          state=Setup(root,"Preparing"); Directory.CreateDirectory(state.install+".__jianzhang_transaction");
+          Invoke("Save"); path=Path.Combine(state.install+".__jianzhang_transaction","journal.json");
+          boundary="journal.beforeReplace"; state.phase="Prepared";
+        }
+        oldHash=(string)Invoke("Hash",path); payload=Snapshot(state.install);
+      }
+      internal void Save() { if(uninstall==null) Invoke("Save"); else Invoke("SaveUninstallRecord",path,uninstall); }
+      internal void AssertPayload() { Invoke("CheckFiles",state.install,payload,true); }
+      internal void AssertNew(string file) {
+        var json=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(file,Encoding.UTF8));
+        if((string)json["phase"]!=(uninstall==null?"Prepared":"Completed")) throw new Exception("New journal state was not fully serialized.");
+      }
+    }
+    static IOException NativeIo(int code) { return new IOException("Controlled publication error "+code,unchecked((int)(0x80070000u|(uint)code))); }
+    static void AssertPublicationError(Exception error,JournalFixture fixture,int attempts,int? native) {
+      if(error==null||!error.Message.Contains("Operation=File.Replace")||!error.Message.Contains("Source="+fixture.path+".new")||!error.Message.Contains("Target="+fixture.path)||!error.Message.Contains("Attempt="+attempts+"/5")) throw new Exception("Publication error lost actual action, paths or attempt evidence.");
+      if(error.InnerException==null) throw new Exception("Publication error lost its original I/O exception.");
+      if(native.HasValue&&(!error.Message.Contains("HResult=0x"+unchecked((uint)NativeIo(native.Value).HResult).ToString("X8"))||!error.Message.Contains("NativeError="+native.Value))) throw new Exception("Publication error lost its original native HRESULT.");
+    }
+    static void JournalTransient(string root,bool removing,int code,int failures) {
+      var fixture=new JournalFixture(root,removing); int attempts=0;
+      Set("fileTestFault",new Action<string>(delegate(string point){ if(point==fixture.boundary&&++attempts<=failures) throw NativeIo(code); }));
+      try { fixture.Save(); } finally { Set("fileTestFault",null); }
+      if(attempts!=failures+1||File.Exists(fixture.path+".new")) throw new Exception("Transient publication did not retry exactly or consume only its staged file.");
+      fixture.AssertNew(fixture.path); fixture.AssertPayload(); passed++;
+    }
+    static void JournalPersistent(string root,bool removing,int code,int expectedAttempts) {
+      var fixture=new JournalFixture(root,removing); int attempts=0; Exception rejected=null;
+      Set("fileTestFault",new Action<string>(delegate(string point){ if(point==fixture.boundary){attempts++;throw NativeIo(code);} }));
+      try { try {fixture.Save();}catch(IOException error){rejected=error;} } finally { Set("fileTestFault",null); }
+      AssertPublicationError(rejected,fixture,expectedAttempts,code);
+      if(attempts!=expectedAttempts||(string)Invoke("Hash",fixture.path)!=fixture.oldHash) throw new Exception("Persistent journal failure changed old bytes or exceeded its retry limit.");
+      fixture.AssertNew(fixture.path+".new"); fixture.AssertPayload();
+      fixture.Save(); fixture.AssertNew(fixture.path); fixture.AssertPayload(); passed++;
+    }
+    static void JournalUnknown(string root,bool ordinary) {
+      var fixture=new JournalFixture(root,false); int attempts=0; Exception rejected=null;
+      var original=ordinary?new IOException("Ordinary non-native I/O failure"):new IOException("Unknown facility with deceptive low 16-bit native code",unchecked((int)0x81230497u));
+      Set("fileTestFault",new Action<string>(delegate(string point){if(point==fixture.boundary){attempts++;throw original;}}));
+      try {try {fixture.Save();}catch(IOException error){rejected=error;}} finally {Set("fileTestFault",null);}
+      AssertPublicationError(rejected,fixture,1,null);
+      if(attempts!=1||!Object.ReferenceEquals(rejected.InnerException,original)||!rejected.Message.Contains("NativeError=unavailable")||(string)Invoke("Hash",fixture.path)!=fixture.oldHash) throw new Exception("Unknown HRESULT was reinterpreted as a transient Win32 error.");
+      fixture.AssertNew(fixture.path+".new");fixture.AssertPayload();passed++;
+    }
+    static void JournalNameChanged(string root,int code,bool removeSource) {
+      var fixture=new JournalFixture(root,false); int attempts=0; Exception rejected=null; string displaced=fixture.path+".displaced";
+      Set("fileTestFault",new Action<string>(delegate(string point){if(point==fixture.boundary){attempts++;if(removeSource)File.Delete(fixture.path+".new");else File.Move(fixture.path,displaced);throw NativeIo(code);}}));
+      try {try{fixture.Save();}catch(IOException error){rejected=error;}}finally{Set("fileTestFault",null);}
+      AssertPublicationError(rejected,fixture,1,code);
+      if(attempts!=1||(string)Invoke("Hash",removeSource?fixture.path:displaced)!=fixture.oldHash||(!removeSource&&File.Exists(fixture.path))) throw new Exception("Changed publication names caused unsafe retry, recreation or old-journal loss.");
+      if(!removeSource)fixture.AssertNew(fixture.path+".new");fixture.AssertPayload();passed++;
+    }
+    static void JournalNativeLock(string root,bool releaseLock) {
+      var fixture=new JournalFixture(root,false); int attempts=0;Exception rejected=null;
+      var signal=new ManualResetEvent(false);var held=new FileStream(fixture.path,FileMode.Open,FileAccess.Read,FileShare.Read);
+      Thread release=null;
+      if(releaseLock){release=new Thread(delegate(){signal.WaitOne(5000);Thread.Sleep(75);held.Dispose();});release.IsBackground=true;release.Start();}
+      Set("fileTestFault",new Action<string>(delegate(string point){if(point==fixture.boundary){attempts++;signal.Set();}}));
+      try {try{fixture.Save();}catch(IOException error){rejected=error;}}
+      finally{Set("fileTestFault",null);signal.Set();if(release!=null&&!release.Join(2000))throw new Exception("Owned lock-release thread did not finish.");held.Dispose();signal.Dispose();}
+      if(releaseLock){if(rejected!=null)throw rejected;if(attempts<2||attempts>5)throw new Exception("Released real journal lock was not retried within its limit.");fixture.AssertNew(fixture.path);}
+      else{AssertPublicationError(rejected,fixture,5,null);if(attempts!=5||(string)Invoke("Hash",fixture.path)!=fixture.oldHash)throw new Exception("Persistent real journal lock changed old bytes or retry count.");fixture.AssertNew(fixture.path+".new");}
+      fixture.AssertPayload();passed++;
+    }
+    static void JournalReadonly(string root) {
+      var fixture=new JournalFixture(root,false);int attempts=0;Exception rejected=null;
+      File.SetAttributes(fixture.path,FileAttributes.ReadOnly);
+      Set("fileTestFault",new Action<string>(delegate(string point){if(point==fixture.boundary)attempts++;}));
+      try{try{fixture.Save();}catch(IOException error){rejected=error;}}
+      finally{Set("fileTestFault",null);File.SetAttributes(fixture.path,FileAttributes.Normal);}
+      AssertPublicationError(rejected,fixture,1,5);
+      if(attempts!=1||(string)Invoke("Hash",fixture.path)!=fixture.oldHash)throw new Exception("Read-only journal was retried or modified.");
+      fixture.AssertNew(fixture.path+".new");fixture.AssertPayload();passed++;
+    }
+#if INSTALLER_QA
+    static void JournalDiagnostic(string root,bool blocked) {
+      var fixture=new JournalFixture(root,false);int attempts=0;Exception rejected=null;
+      Set("config",new Config{version="2.0.0",qaRoot=root,files=new PayloadFile[0]});
+      string log=Path.Combine(root,"journal-publication-errors.jsonl");if(blocked)Directory.CreateDirectory(log);
+      var original=NativeIo(1175);
+      Set("fileTestFault",new Action<string>(delegate(string point){if(point==fixture.boundary&&++attempts<=2)throw original;}));
+      try{try{fixture.Save();}catch(IOException error){rejected=error;}}finally{Set("fileTestFault",null);}
+      if(blocked){
+        AssertPublicationError(rejected,fixture,1,1175);
+        if(attempts!=1||!Object.ReferenceEquals(rejected.InnerException,original)||!rejected.Message.Contains("QA diagnostic write failure")||!(rejected.Data["QA diagnostic error"] is Exception)||(string)Invoke("Hash",fixture.path)!=fixture.oldHash)throw new Exception("Diagnostic failure concealed the original publication error or continued retrying.");
+        fixture.AssertNew(fixture.path+".new");
+      }else{
+        if(rejected!=null)throw rejected;
+        string[] lines=File.ReadAllLines(log,Encoding.UTF8);if(lines.Length!=2||attempts!=3)throw new Exception("QA diagnostic log lost actual retry events.");
+        for(int i=0;i<lines.Length;i++){
+          var record=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(lines[i]);
+          if((string)record["operation"]!="File.Replace"||(string)record["source"]!=fixture.path+".new"||(string)record["target"]!=fixture.path||Convert.ToInt32(record["attempt"])!=i+1||(string)record["hresult"]!="0x80070497"||Convert.ToInt32(record["nativeError"])!=1175||!(bool)record["retry"])throw new Exception("QA diagnostic log did not retain actual action/path/HRESULT data.");
+        }
+        fixture.AssertNew(fixture.path);
+      }
+      fixture.AssertPayload();passed++;
+    }
+#endif
+    static void JournalPublicationCases(string root,bool collectFailures) {
+      var cases=new List<KeyValuePair<string,Action>>();
+      foreach(int failures in new[]{1,2,4}){int count=failures;cases.Add(new KeyValuePair<string,Action>("transient1175-"+count,delegate{JournalTransient(Path.Combine(root,"t1175-"+count),false,1175,count);}));}
+      foreach(int code in new[]{32,33}){int value=code;cases.Add(new KeyValuePair<string,Action>("transient-"+value,delegate{JournalTransient(Path.Combine(root,"t"+value),false,value,2);}));}
+      foreach(int code in new[]{32,33,1175}){int value=code;cases.Add(new KeyValuePair<string,Action>("persistent-"+value,delegate{JournalPersistent(Path.Combine(root,"p"+value),false,value,5);}));}
+      foreach(int code in new[]{5,112,1176,1177}){int value=code;cases.Add(new KeyValuePair<string,Action>("immediate-"+value,delegate{JournalPersistent(Path.Combine(root,"i"+value),false,value,1);}));}
+      cases.Add(new KeyValuePair<string,Action>("unknown-facility",delegate{JournalUnknown(Path.Combine(root,"unknown"),false);}));
+      cases.Add(new KeyValuePair<string,Action>("ordinary-io",delegate{JournalUnknown(Path.Combine(root,"ordinary"),true);}));
+      foreach(int code in new[]{1175,1176,1177}){int value=code;cases.Add(new KeyValuePair<string,Action>("moved-target-"+value,delegate{JournalNameChanged(Path.Combine(root,"m"+value),value,false);}));}
+      cases.Add(new KeyValuePair<string,Action>("missing-staged1175",delegate{JournalNameChanged(Path.Combine(root,"missing"),1175,true);}));
+      cases.Add(new KeyValuePair<string,Action>("uninstall-transient1175",delegate{JournalTransient(Path.Combine(root,"ut"),true,1175,2);}));
+      cases.Add(new KeyValuePair<string,Action>("uninstall-persistent1175",delegate{JournalPersistent(Path.Combine(root,"up"),true,1175,5);}));
+      cases.Add(new KeyValuePair<string,Action>("released-real-lock",delegate{JournalNativeLock(Path.Combine(root,"rl"),true);}));
+      cases.Add(new KeyValuePair<string,Action>("persistent-real-lock",delegate{JournalNativeLock(Path.Combine(root,"pl"),false);}));
+      cases.Add(new KeyValuePair<string,Action>("read-only-journal",delegate{JournalReadonly(Path.Combine(root,"ro"));}));
+      int failed=0;
+      foreach(var test in cases){try{test.Value();Console.WriteLine("JOURNAL_CASE PASS "+test.Key);}catch(Exception error){if(!collectFailures)throw;failed++;Console.Error.WriteLine("JOURNAL_CASE FAIL "+test.Key+" "+error);}}
+      if(failed>0)throw new Exception("Journal publication regressions failed="+failed+" total="+cases.Count);
+    }
     static void PublishFailure(string root,string boundary) {
       var state=Setup(root,"Preparing");
       Set("fileTestFault",new Action<string>(delegate(string point) { if(point==boundary) throw new IOException("Injected file-only fault: "+point); }));
@@ -547,9 +679,20 @@ namespace JianzhangInstaller {
         Set("fileTestFault",new Action<string>(delegate(string point) { if(point==args[2]) Environment.Exit(99); }));
         Invoke("PublishInitialJournal"); return 3;
       }
-      if(args.Length!=1) return 2;
-      string root=Path.GetFullPath(args[0]); Directory.CreateDirectory(root);
+      bool journalOnly=args.Length==2&&args[0]=="--journal-publication-tests";
+      bool diagnosticsOnly=args.Length==2&&args[0]=="--journal-diagnostics-tests";
+      if(args.Length!=1&&!journalOnly&&!diagnosticsOnly) return 2;
+      string root=Path.GetFullPath(args[journalOnly||diagnosticsOnly?1:0]); Directory.CreateDirectory(root);
       try {
+        if(diagnosticsOnly){
+#if INSTALLER_QA
+          JournalDiagnostic(Path.Combine(root,"normal"),false);JournalDiagnostic(Path.Combine(root,"blocked"),true);
+          Console.WriteLine("JOURNAL_DIAGNOSTIC_TESTS passed="+passed+" registry_access=none");return 0;
+#else
+          throw new Exception("Diagnostic tests require the existing INSTALLER_QA and INSTALLER_FILE_TESTS definitions.");
+#endif
+        }
+        if(journalOnly){JournalPublicationCases(root,true);Console.WriteLine("JOURNAL_PUBLICATION_TESTS passed="+passed+" registry_access=none");return 0;}
         Invoke("Probe",root);
         if(Directory.GetFileSystemEntries(root).Length!=0) throw new Exception("Probe left a file behind.");
         passed++;
@@ -616,6 +759,7 @@ namespace JianzhangInstaller {
         BudgetReviewerInput(Path.Combine(root,"budget-marker"),true);
         foreach(string kind in new[]{"manifest","personal","directory"}) BudgetRelativeInput(Path.Combine(root,"budget-"+kind),kind);
         BudgetBoundaryTransaction(Path.Combine(root,"budget-boundary"));
+        JournalPublicationCases(Path.Combine(root,"journal-replace"),false);
         Console.WriteLine("FILE_ONLY_TESTS passed="+passed+" registry_access=none");
         return 0;
       } catch(Exception error) {

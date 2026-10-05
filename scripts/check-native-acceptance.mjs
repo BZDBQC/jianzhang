@@ -114,6 +114,7 @@ export function verifyAcceptance(report) {
       const valid = object(metric) && Number.isFinite(metric.value) && metric.value >= 0 && Number.isSafeInteger(metric.samples) && metric.samples >= 20 && files(metric.evidence) &&
         object(raw) && raw.metric === key && raw.roundId === round.roundId && raw.buildId === round.buildId && ['release', 'profile'].includes(raw.mode) && metric.mode === raw.mode && configHash && raw.configurationSha256 === configHash && Array.isArray(samples) && samples.length === metric.samples && samples.every(n => Number.isFinite(n) && n >= 0);
       if (!valid) { fail(`${tag} ${key} 缺少有效原始实测样本`); continue; }
+      if (raw.diagnosticRun !== undefined && raw.diagnosticRun !== false) { fail(`${tag} ${key} 诊断运行不得用于正式验收`); continue; }
       if (measurementModes.has(key) && measurementModes.get(key) !== raw.mode) fail(`${tag} ${key} 改变了测量模式`);
       measurementModes.set(key, raw.mode);
       const sorted = [...samples].sort((a, b) => a - b);

@@ -138,3 +138,40 @@ Windows 10、安卓真机和真实短信属于明确未验证边界。旧 1.0.1 
 - R14 QA导航独审发现真实drawer叠层中误点背景文档，BLOCKED资料原样保留。R14b增加合法drawer祖先/边界/父行点击验证，43项纯回归、7项完整实际XML回放通过，独审APPROVE只允许真实SAF四场景复测。当前生产APK及源码未变；先安全归档profile证据，再恢复原签名release以执行实际文件操作。
 - 官方不同包API37.1 ps16k r9已通过Java cmdline-tools19安装，并准备独立新AVD `Jianzhang_API37_QPR1_16KB`，标准4CPU/4096MB，无内部feature覆盖。原37.0镜像、AVD与emulator二进制保留。准备结果是prepared-not-booted，尚无SDK37/16KB/系统截图或应用兼容通过结论。CLI23.0先前exit0但缺包的尝试不计安装成功。
 - 用户侧Windows命令再次在解析阶段失败：两行粘成一行导致AmpersandNotAllowed，尚未运行安装脚本。已提供仅一行、全部绝对路径的命令，真实外部完整安装结果仍待返回。最终六API矩阵、安卓性能整改、Windows完整安装及连续三轮未完成，**0/3**。
+
+## 2026-10-05 21:23 当前原生文件操作复测
+
+- R14b已审脚本在当前R12原签名APK真实4/4通过：旧Ledger JSON六笔预览取消、可靠管道错误、损坏JSON拒绝、原30秒停滞生产者导入Back取消；后者缓存714.79ms清空。5份实际domain SQL摘要含9表且内容SHA一致，70份原始SQL/XML/PNG/ADB日志按SHA归档，`.qa/android-saf-release-r14b/evidence.json`status=passed。测试后系统top确认客户端，Home/force-stop只QA包，ADB交还root。未将前三轮失败或纯fixtures代替本次真实结果。
+- 新`.qa/native-windows-installer-r12-user/installer-results.json`记录真实r12usr执行，13:06:07–13:06:09 UTC，registration.create仍失败并回滚、0cases。用户明确确认从Windows开始菜单打开PowerShell执行，撤销“仅工具进程限制”解释。只读诊断发现当前工具token是Medium/IsTokenRestricted=false，工作区001有显式Low Mandatory Label、子目录/当前QA及生产安装包继承Low；尚无历史child token观测，不将目录Temp/Low单独作为进程身份证明。继续诊断，不修改DACL/完整性标签、系统策略或做独立注册表写探针。
+- 源码/审查/QA修复检查点已提交Git `d3a36657b80666c018713110d399efe20c4ce898`。安卓性能未达标继续整改，下一次仅QA harness额外保留全部帧的build/raster时间和SQL result callback时间戳，原指标计时/阈值及全部totalSpan不变；回调间隔不是孤立SQL耗时，会明确标记诊断边界。
+
+## 2026-10-05 22:03 正常安装验收副本与性能诊断检查点
+
+- 新官方37.1 ps16k r9实际启动命令已确认SDK major37、full37.1、codename REL、page16384；预安装完整15.6MB logcat记录5次SurfaceFlinger SIGABRT，同一DMA断言。无正常系统PNG/完整CPU-RAM/客户端smoke，未安装APK；SystemUI缺失导致采集器空值汇总失败，原始输出保留并从已有stdout补事实，不补造截图退出码。parent14980自行退出原因未知，ADB为空后已交回，证据`.qa/android-api37-qpr1-boot-6dd2d29d503445658078fbc74ec6f839`。
+- 安装文件标签诊断已写`docs/native-windows-integrity-diagnosis-r12.md`，官方MIC/NSIS证据及历史child token未观测边界明确。未修改原001工作目录、任何MIC标签或系统权限。首次正常Desktop任务副本复制与profile编译并发碰到SDK内部Gradle executionHistory.bin文件锁，复制真实exit1，原部分副本保留；自动审批拒绝含清理缓存与续传的整条操作（仅blocked by policy），未执行，也未交由子agent换工具执行同删除。
+- 改用不同的无删除fresh稳定输入复制：新`C:/Users/RM/Desktop/jz-native-qa-r12b`，提前排除SDK内部生成的Gradle .gradle/build运行缓存，无源/数据删除、无DACL/SACL/标签改写，19449文件逐字SHA匹配，原Windows source61文件及Release15文件合同通过。`.qa/normal-windows-qa-copy-r12b.json`status source-and-payload-verified，22:01:53完成。复制build manifest只重绑定镜像bundle路径，保留qaCopyOrigin/原manifest SHA，明确不是重新构建。待原样已审脚本在正常新自有`.qa/i`打包并完成真实完整安装/卸载验收；旧Low环境失败未被抹去。
+- 只QA performance harness增加默认false诊断开关，原30save/query/12fling/全部totalSpan/导出与cleanup逐字独审8/8通过；SQL callback Stopwatch与frame engine epoch未校准，记录明确禁止跨时钟相减。所有metric/operations附diagnosticRun bool，验收门禁拒绝非false诊断标记，旧缺字段证据兼容。真实RED→GREEN及TypeScript独审通过（所有8指标true/多种非法类型均拒绝、原p95公式未改、原证据SHA不变）。R15两份独审文档冻结。
+- 首次diagnostic build命令误用不存在的Java目录，真实exit1保存；修正为已有JDK17.0.3.1和原gradle-cache后76s编译成功，`.qa/native-android-phase-build-r15b.json`含真实来源/时间/内存，profile APK SHA60153b5145e1bda8c17a58ec11420d168b386b85f39d9a735db57457cb214746。生产source仍1b7f30c...且正式APK476ed...未变。官方停止本任务Gradle，标准API35/2048MB/4CPU/software重新启动parent10792，后续trace严格不计干净轮次，性能整改尚未完成，**0/3**。
+
+## 2026-10-05 22:28 安装与模拟器运行环境检查点
+
+- 正常目录 QA 安装包已原样打包并校验：`C:/Users/RM/Desktop/jz-native-qa-r12b/.qa/native-installer-r12-normal-setup.exe` SHA `f9fe46e031de28c08ad408b8dc636cf9f1041854ea64fe7eb362ca935a941538`，其完整19文件payload仍为ec0d22…，客户端来源1379338b…；生产EXE复制后仍886a844…，未修改原工作区标签。正常副本build manifest仅重绑定bundle路径，明确记录原build manifest及全部复制证据来源，不能视为重新构建。完整真实安装/升级/回滚/卸载脚本继续执行准备，尚无通过结论。
+- 第一 API35 parent10792已消失，退出原因未知。第二次标准启动由长驻父命令持有，owner1572和QEMU1552的创建时间及映像路径均匹配；22:20实际只读线程查询显示QEMU全部59线程Suspended、CPU0.796875秒，而parent仍在等待。Application Error事件1000记录22:07:33.4222154本任务SDK的crashpad_handler.exe自身异常0x80000003，原始XML按SHA保存；与QEMU挂起的因果关系尚未证实。当前可用物理内存约7.7GB、虚拟约9.5GB。没有解冻、改变作业限制或修改系统安全配置；新的profile APK尚未安装或执行，`.qa/android-phase-r15-runtime-state.json`明确offline-no-profile-execution，**0/3**。
+
+## 2026-10-05 23:45 回归与性能对照检查点
+
+- R17 安装恢复日志发布修复：只对确定的 Win32 32/33/1175 错误进行有界重试，不改权限、不删除旧日志、不改变回滚合同。独立 C# 静态审查通过；真实完整文件测试 179/179、打包检查 13/13 通过，记录在 `.qa/installer-journal-r17-full-regression.log`。完整新安装包实际回归尚未完成。
+- R16 SQL 优化完成；真实全量 Flutter 测试 179/179，包含十万笔恢复导出。静态检查发现测试文件多余导入并修正，复查无问题。日志 `.qa/flutter-tests-r17c.log`、`.qa/flutter-analyze-r17b.log`。两个较早测试启动因进程配置路径不可写失败，原日志保留。
+- 同一冻结 R12 profile APK 的两组诊断均真实完成并按设备/主机 SHA 校验归档。Impeller：保存 p95 309.436ms、681 帧中 9 长帧；Skia 对照：保存 p95 295.836ms、查询 p95 192.75ms、792 帧中 0 长帧。原始六份对照记录在 `.qa/android-skia-r16/archive.json`，分析在 `comparison-analysis.json`；实际启动日志明确 `enable-impeller false`。诊断不计正式轮次，配置差异明确保留，生产渲染配置未改变。冻结 APK 已另存 `.qa/android-phase-r15/frozen-profile.apk`。
+- 正常目录 API37 ps16k 仍在安装应用前发生 SurfaceFlinger DMA 断言，不能完成截图或客户端验收；记录 `.qa/normal-api37-boot-r16-16b0c719a46346e98fdece6a6f8bb8f5`。停止的仅是已核对归属的测试进程，没有修改系统安全策略。
+- Windows 新源码正在构建。关键测试仍未齐全，正式干净轮次 **0/3**，不能宣告完成。
+Windows R17 actual installer regression: 47/47 passed; QA setup SHA 227b8411e5cac0f2478aa2714860802b82c5f310460b64cacf26ca6020f24e28; copied results .qa/windows-installer-r17-normal-results.json. API35 release UI: 16 screenshots/steps, status passed; source 8eedcd1bfcda3c78d77fc1ebcb4278beeb821c9c728149d7dfc7622ec3e7d33f; APK 9f186ad187c505c5e84d0641245f75caaf02d027aa73fff1e935deff80dc4394. New fixed-renderer profile build still executing; no formal clean round.
+
+## 2026-10-06 R17 独立复审及安装验收检查点
+
+- `docs/native-iteration-review-round16-sql.md`、`docs/native-iteration-review-round17-installer.md` 两项独立复审均 APPROVE；全仓 ESLint 实际 exit0。测试最终哈希变化唯一来源为删除冗余导入，已精确核对，新增测试最终8/8通过。
+- R17 正常目录 QA 安装器实际47/47通过，覆盖首装、升级、18个升级故障注入、中断恢复、锁定/只读文件、卸载保留账本、17个首装故障注入、目录占用和不可写父目录。原始结果已按SHA复制到 `.qa/windows-installer-r17-normal-results.json`。生产候选安装器 SHA `15c38a3a27bb08b84a547eb082506f447214bc4de4cc95b835dad82b93649919`。
+- 安卓 API35 新正式包真实16步界面回归 passed；APK SHA `9f186ad187c505c5e84d0641245f75caaf02d027aa73fff1e935deff80dc4394`，仍原正式证书 c39806…、versionCode3、16KB静态校验通过。开发 profile 的证书5be30f…与正式包不同，最初覆盖失败已记录；原六份诊断证据和profile APK归档完成后，仅卸载该模拟器的开发诊断包，正式新装成功。不能把此步骤称为旧正式版本的同签名升级验收。
+- API35 UI真实检查首次离线、支出/收入/转账及手续费、关闭重开三笔保留、账单列表、横屏、字体放大、键盘、返回撤销草稿；16份截屏证据 `.qa/android-ui-r17-api35/evidence.json`。系统设置清理无错误。
+- 新默认渲染配置性能 profile 编译476.6s未完成，取消已核对本任务的Gradle client6036及只读jstack helper16172，保留失败日志及 `.qa/android-profile-r17-stall.json`。官方 Gradle stop 无运行daemon；随后使用 `--no-android-gradle-daemon` 和进程内Kotlin策略重试，仅改变构建进程策略，不改变生产源码或运行配置。
+- 尚无 R17 实际100k性能结论、完整安卓矩阵或正式干净轮次，仍 **0/3**。API37应用启动前图形故障未解决；Windows10/安卓真机/真实短信边界不变。

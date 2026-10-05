@@ -14,6 +14,11 @@ $apkPath=Assert-WorkspacePath -Workspace $workspace -Path $Apk -PathType File
 $outputPath=Assert-WorkspacePath -Workspace $workspace -Path $Output -PathType File -AllowMissing
 $qaRoot=(Join-Path $workspace '.qa')+[IO.Path]::DirectorySeparatorChar
 if (!$outputPath.StartsWith($qaRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'Measurements must be written under the owned .qa directory.' }
+foreach ($evidencePath in @($outputPath,($outputPath+'.failure.json'),($outputPath+'.partial.json'))) {
+  if (Test-Path -LiteralPath $evidencePath) { throw 'Choose fresh startup evidence paths; previous samples must be retained.' }
+}
+$failurePath=Assert-WorkspacePath -Workspace $workspace -Path ($outputPath+'.failure.json') -PathType File -AllowMissing
+$partialPath=Assert-WorkspacePath -Workspace $workspace -Path ($outputPath+'.partial.json') -PathType File -AllowMissing
 $adb=Join-Path $workspace '.tools/android-sdk/platform-tools/adb.exe'
 $package='com.jianzhang.ledger'
 $activity=$package+'/.MainActivity'
@@ -96,6 +101,10 @@ for ($sample=0;$sample -lt $Count;$sample++) {
   $nativeMs=$null
   $fullyDrawnMs=$null
   $newPid=$null
+  $launch=@()
+  $launchToken=$null
+  $seenLaunchMarker=$false
+  $startupError=$null
   $streamStarted=$false
   try {
     if (!$stream.Start()) { throw 'Could not start the owned log reader.' }
@@ -124,11 +133,31 @@ for ($sample=0;$sample -lt $Count;$sample++) {
     if ($null -eq $nativeMs -or $null -eq $fullyDrawnMs) { throw 'Native ledger-loaded rendered-home readiness timed out.' }
     $samples.Add($fullyDrawnMs)
     $logs.Add(@{index=$sample;pid=[int]$newPid;fullyDrawnMs=$fullyDrawnMs;nativeMs=$nativeMs;observerMs=$launchClock.Elapsed.TotalMilliseconds;launch=$launch;log=$lines.ToArray()})
+    @{status='incomplete';formalAcceptance=$false;completedCount=$samples.Count;requiredCount=$Count;apkSha256=$hash;samples=$samples.ToArray();logs=$logs.ToArray()} |
+      ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $partialPath -Encoding utf8
     Write-Host "Android cold sample $($sample+1)/${Count}: fully drawn $fullyDrawnMs ms, native $nativeMs ms."
+  } catch {
+    $startupError=$_
+    try {
+      @{status='incomplete';sampleIndex=$sample;completedSamples=$samples.ToArray();pid=$newPid;nativeMs=$nativeMs;fullyDrawnMs=$fullyDrawnMs;seenLaunchMarker=$seenLaunchMarker;launchToken=$launchToken;log=$lines.ToArray();error=$startupError.ToString();at=[DateTimeOffset]::UtcNow.ToString('o')} |
+        ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $failurePath -Encoding utf8
+    } catch { Write-Warning ('Could not retain startup failure evidence: '+$_.Exception.Message) -WarningAction Continue }
+    throw $startupError
   } finally {
-    if ($streamStarted -and !$stream.HasExited) { $stream.Kill(); $stream.WaitForExit() }
-    $stream.Dispose()
-    Invoke-Adb @('shell','am','force-stop',$package) | Out-Null
+    $cleanupError=$null
+    try {
+      if ($streamStarted -and !$stream.HasExited) { $stream.Kill(); $stream.WaitForExit() }
+      $stream.Dispose()
+    } catch { $cleanupError=$_ }
+    try { Invoke-Adb @('shell','am','force-stop',$package) | Out-Null }
+    catch {
+      if (!$cleanupError) { $cleanupError=$_ }
+      else { Write-Warning ('Additional startup cleanup failure: '+$_.Exception.Message) -WarningAction Continue }
+    }
+    if ($cleanupError) {
+      if ($startupError) { Write-Warning ('Startup cleanup also failed: '+$cleanupError.Exception.Message) -WarningAction Continue }
+      else { throw $cleanupError }
+    }
   }
 }
 Assert-InstalledArtifact

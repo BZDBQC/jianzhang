@@ -192,3 +192,19 @@ Windows R17 actual installer regression: 47/47 passed; QA setup SHA 227b8411e5ca
 - R19提交确认修复独立审查 APPROVE（`docs/native-iteration-review-round19-commit-ack.md`）；全量181/181通过、analyze无问题。Windows构建49.6s、Android全ABI正式构建138.0s通过。新APK SHA `0f26253b294df49b2bd41df14d2e202587d24acf08a464293379b17435cd11bc`，新Windows安装器 SHA `d8c750018fa059018cc1bbbf5550c3b9243e5d9a4e9b61dd17a75888ff8f179f`，均为未完成验收候选。
 - 已校验并归档原R17 APK/EXE到 `.qa/r17-candidate-preserved`；正常目录78份新版源码/完整Windows负载逐字节SHA核对复制，不更改ACL，登记 `normal-r19-copy-records.json`。R19正常目录安装故障回归运行中。
 - API35仅移除已归档且已核对SHA的本任务诊断profile包，先安装原R17正式证书APK，再用 `install -r` 覆盖R19成功；此步仅证明同签名覆盖，未种入数据、不宣称升级保留账本。R19真实界面回归运行中，20次冷启动尚待。
+- R19 Windows实际安装器回归47/47通过，结果按SHA复制到 `.qa/windows-installer-r19-normal-results.json`；Android API35 release实际16步UI回归passed，三笔及备注重启保留，系统设置恢复无错误。
+- R19同候选带三笔账单覆盖重装后，首页仍显示3笔，逐项备注验证通过 `.qa/android-upgrade-data-r19b/evidence.json`。首个临时检查把滑动起点设在列表之外而误报未见第三笔，失败XML保留；重测使用实际ScrollView边界。此处不代替旧1.x迁移数据升级验收。
+- API35 R19冷启动首组仅完成5/20样本，之后adb离线，持有的模拟器宿主进程退出码-529697949（0xE06D7363），并无应用崩溃证据。保留日志与 `.qa/android-coldstart-r19-incomplete.json`，不计合格完整样本；未擦除AVD数据，使用普通相同参数重启后重新采集20样本。
+- R19冷采样第二组就绪超时、第三组9样本后ADB宿主返回-1073741523（0xC000012D提交内存限制）。实际观察构建残留Gradle/Kotlin两进程约3GB私有内存，使用本项目Gradle缓存的官方stop退出；资源失败不归因于应用，也不计正式验收。仅关闭核对所有权的本任务VM，数据未清除。
+- 无构建工作进程的R19d完整20次Android冷启动p95=1569ms通过；API35实际1080x1920/density420/4CPU/page4096，配置文件 `.qa/fixed-configuration-r19.json` SHA d62d03c4bdf14c5ec54835c3cf68ce0b3ada506006ba7a84391b25e3fc8e337a。R19普通目录实际安装完整负载后Windows20次冷启动p95=1815.0468ms通过，原始结果按SHA复制 `.qa/windows-coldstart-r19-installed.json`。这些单项开发回归不代替三轮。
+- 冷采样脚本补充部分样本和失败日志；独立审查复现并修正清理异常覆盖主异常、派生文件路径校验、WarningPreference=Stop覆盖主异常，六项纯内存探针通过，最终APPROVE，见 `docs/native-iteration-review-round19-startup-evidence.md`。脚本变更不改变时间计算或门槛。
+- R19新无追踪/default renderer x64 profile90.4s构建通过，冻结APK SHA5ccbcaf22d377a2fe0636218b01ecbefe6dac02f86ef1dcf937752c529b67a4e；正式APK仍全ABI。正常目录API26/29/33/36独立AVD准备完成，尚未代表运行验收。
+
+## 2026-10-06 用户限定最后一轮 R20
+
+- 用户明确要求“再优化一轮就停止”。当前R20为最后一轮，完成本次优化、验证和候选交付后停止，不再扩大循环；完整系统矩阵与三轮正式验收未完成状态需保留。
+- R19无追踪/default renderer/无构建工作进程实际100k证据五份均设备/主机SHA校验 `.qa/android-performance-r19`：保存p95=307.423ms未达标，筛选226.227ms达标，6/668长帧=0.8982036%达标；导出恢复通过。R19整体不能记干净轮次。
+- R20以Drift支持的 `customWriteReturning` 合并版本自增与结果捕获，减少一次SQL往返；CAS单独校验保留、仍事务内取得实际版本、成功提交后通知。新成本回归实际RED→GREEN11/11，全量182/182通过，analyze无问题。独立审查进行中，双端最终本轮构建开始；尚未声称Android性能已达标。
+- R20独立审查APPROVE，bundled SQLite3.53.4支持RETURNING；182/182和analyze无问题。Windows构建44.7s、正式Android全ABI构建122.4s；APK SHAa13b8394431bb3bea4d93fa64f766ea05e592f51287a086f57e08bffacdfea4f、Windows EXE SHA0fec6e359dcb46d91e8574e09bfe4a54b6fd35bd2f004fbbb089d925ee1d6a7f。完整交付候选均未完成正式验收。
+- R20普通目录首装初测被仍已登记的R19冷采样QA副本拒绝（符合防止异目录重复安装）；仅核对并卸载该副本，失败现场保留，改用新证据目录r20normalb重测。本轮不改生产安装器逻辑。
+- 最终R20 x64 profile84.4s构建通过，保持无trace/defaultrenderer，正式release不改全ABI；API35 R19正式候选→R20同签名覆盖成功。R20实际16步UI回归和Windows47项重测运行中。

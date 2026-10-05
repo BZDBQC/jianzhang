@@ -25,7 +25,7 @@ void main() {
     audit = sqlite3.open(path);
     audit.execute('CREATE TABLE qa_settings_updates(n INTEGER NOT NULL)');
     audit.execute('INSERT INTO qa_settings_updates VALUES(0)');
-    // afterRead observes SELECTs only. This fixture-owned trigger also observes
+    // afterRead observes returned rows. This fixture-owned trigger also observes
     // no-op settings UPDATEs, and its counter rolls back with the mutation.
     audit.execute('''
       CREATE TRIGGER qa_settings_update AFTER UPDATE OF settings ON workspaces
@@ -58,6 +58,24 @@ void main() {
   );
 
   test(
+    'revision increment returns its value without another SQL read',
+    () async {
+      await repository.saveTransaction(entry('returning'), create: true);
+      expect(
+        reads.where((sql) => sql.endsWith('RETURNING sequence')),
+        hasLength(1),
+      );
+      expect(
+        reads.where(
+          (sql) => sql == 'SELECT sequence FROM workspaces WHERE key=?',
+        ),
+        isEmpty,
+      );
+      expect((await repository.meta()).sequence, 1);
+    },
+  );
+
+  test(
     'save acknowledgement does not read after the database commit',
     () async {
       final before = await repository.meta();
@@ -65,7 +83,7 @@ void main() {
       repository = await SqliteLedgerRepository.connect(
         path: '${directory.path}/ledger.db',
         afterRead: (sql) async {
-          if (sql == 'SELECT sequence FROM workspaces WHERE key=?' &&
+          if (sql.endsWith('RETURNING sequence') &&
               (audit
                           .select(
                             "SELECT sequence FROM workspaces WHERE key='guest'",
@@ -91,7 +109,7 @@ void main() {
     repository = await SqliteLedgerRepository.connect(
       path: '${directory.path}/ledger.db',
       afterRead: (sql) async {
-        if (sql == 'SELECT sequence FROM workspaces WHERE key=?') {
+        if (sql.endsWith('RETURNING sequence')) {
           throw StateError('Injected revision read failure');
         }
       },
@@ -136,7 +154,7 @@ void main() {
         reads.where(
           (sql) => sql == 'SELECT sequence FROM workspaces WHERE key=?',
         ),
-        hasLength(2),
+        hasLength(1),
       );
       expect(revisions, [before.sequence + 1]);
       expect(settingsUpdates(), 0);

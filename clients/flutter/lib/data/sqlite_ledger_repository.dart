@@ -344,14 +344,18 @@ abstract class _RepositoryCore extends LedgerRepository {
       await _checkScope(expectedWorkspace, expectedSequence);
       final result = await action();
       notices = await _notifyBudgets();
-      await _db.customStatement(
-        'UPDATE workspaces SET sequence=sequence+1,dirty=? WHERE key=?',
-        [_workspace == 'guest' ? 0 : 1, _workspace],
+      const revisionSql =
+          'UPDATE workspaces SET sequence=sequence+1,dirty=? WHERE key=? RETURNING sequence';
+      final revisions = await _db.customWriteReturning(
+        revisionSql,
+        variables: _variables([_workspace == 'guest' ? 0 : 1, _workspace]),
       );
+      await _readHook?.call(revisionSql);
+      final revision = revisions.single.read<int>('sequence');
       await _commitHook?.call('save');
       // Capture the revision while failures can still roll back the write.
       // A read after commit must not turn a successful save into a failure.
-      return (result, await _sequence());
+      return (result, revision);
     });
     _events.add(result.$2);
     for (final notice in notices) {

@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "release": "2.0.0+3",
+  "requiredCleanRounds": 3,
+  "excluded": ["windows10-real", "android-physical", "sms-real-provider"],
+  "staticChecks": ["flutter-independent-review", "native-independent-review", "auth-independent-review", "apk-16kb-pages"],
+  "requiredChecks": [
+    "domain-shared-goldens", "domain-fee-search-budget", "local-100k-roundtrip",
+    "import-invalid-preserves-ledger", "import-backup-atomic-failure",
+    "save-failure-keeps-draft", "process-interruption-reopen", "disk-full-rollback",
+    "cloud-native-auth", "cloud-401-409-503-isolation", "cloud-byte-count-limit",
+    "cloud-login-no-upload", "flutter-independent-review", "native-independent-review",
+    "auth-independent-review", "apk-signature-upgrade", "apk-16kb-pages",
+    "android-api26", "android-api29", "android-api33", "android-api35",
+    "android-api36", "android-api37", "android-first-offline",
+    "android-rotation-keyboard-back-systembars", "windows-first-offline",
+    "windows-install-upgrade-uninstall", "windows-lock-readonly-paths",
+    "windows-registration-failure", "windows-keyboard-dpi-resize",
+    "visual-360-390-412-600-desktop", "visual-large-text",
+    "visual-contrast-touch", "export-restore-ui-responsive"
+  ],
+  "metrics": {
+    "windowsColdStartP95Ms": {"maximum": 3000},
+    "androidEmulatorColdStartP95Ms": {"maximum": 5000},
+    "windowsSave100kP95Ms": {"maximum": 300},
+    "windowsQuery100kP95Ms": {"maximum": 500},
+    "windowsScrollFramesOver50msRatio": {"exclusiveMaximum": 0.01},
+    "androidSave100kP95Ms": {"maximum": 300},
+    "androidQuery100kP95Ms": {"maximum": 500},
+    "androidScrollFramesOver50msRatio": {"exclusiveMaximum": 0.01}
+  },
+  "evidenceRequired": ["buildHashes", "screenshots", "logs", "fixedConfiguration", "uncovered"]
+}

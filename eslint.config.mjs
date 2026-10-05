@@ -9,6 +9,7 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    "dist/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
@@ -17,6 +18,10 @@ const eslintConfig = defineConfig([
     "output/**",
     ".sites-runtime/**",
     ".playwright-cli/**",
+    ".tools/**",
+    ".qa/**",
+    "clients/flutter/build/**",
+    "clients/flutter/.dart_tool/**",
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],

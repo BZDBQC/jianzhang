@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import {initialLedger,validateLedger,summarize,accountBalance,matches,categoryTotals,budgetSpent,csvExport} from '../lib/ledger.ts';
+const ledger=initialLedger();ledger.started=true;
+const tx=(id,type,amount,extra={})=>({id,type,amount,fee:0,date:'2026-10-04T12:30',accountId:'bank',toAccountId:'',categoryId:type==='income'?'salary-main':'food-lunch',note:'公司 午餐 中文🙂',createdAt:'2026-10-04T12:30',...extra});
+ledger.transactions=[tx('expense','expense',1234),tx('income','income',10000),tx('transfer','transfer',25000,{fee:234,toAccountId:'cash',categoryId:'other-fee'}),tx('nofee','transfer',10000,{toAccountId:'wechat',categoryId:''}),tx('shopping','expense',3400,{categoryId:'shopping-daily',note:'=1+1,\n"中文"'}),tx('edge','expense',10,{date:'2026-10-31T23:59'})];
+ledger.budgets=[{month:'2026-10',categoryId:'',amount:10000,threshold:50},{month:'2026-10',categoryId:'other',amount:234,threshold:100}];validateLedger(ledger);
+const filters=[{}, {types:['expense'],includeFees:true,amountOp:'eq',amountMin:'2.34'}, {types:['expense'],includeFees:true,accountIds:['cash']},{types:['expense'],includeFees:true,accountIds:['bank'],amountOp:'range',amountMin:'2.34',amountMax:'12.34'}, {categoryIds:['food','shopping'],subIds:['food-lunch']},{accountIds:['cash'],accountMode:'in'},{accountIds:['bank'],accountMode:'out'},{note:'公司 中文',noteMode:'all'},{note:'缺失 中文',noteMode:'any'},{start:'2026-10-31',end:'2026-10-31'}];
+const fixture={ledger,summary:summarize(ledger.transactions),balances:Object.fromEntries(ledger.accounts.map(a=>[a.id,accountBalance(a,ledger.transactions)])),categoryTotals:categoryTotals(ledger.transactions,ledger).map(x=>({id:x.category.id,amount:x.amount})),budgetSpent:ledger.budgets.map(b=>budgetSpent(b,ledger)),filters:filters.map(filter=>({filter,ids:ledger.transactions.filter(t=>matches(t,filter,ledger.categories)).map(t=>t.id)})),csv:csvExport(ledger.transactions,ledger)};
+fs.mkdirSync('tests/fixtures',{recursive:true});fs.writeFileSync('tests/fixtures/native-domain-v1.json',JSON.stringify(fixture,null,2));
+fs.writeFileSync('tests/fixtures/native-ledger-v1.json',JSON.stringify(ledger));

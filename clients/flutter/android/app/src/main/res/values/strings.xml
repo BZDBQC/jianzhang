@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">简账</string>
+    <string name="file_cancelled">文件操作已取消，本机账本保留。</string>
+    <string name="file_busy">已有文件操作正在进行。</string>
+    <string name="invalid_extension">缺少有效文件格式。</string>
+    <string name="export_source_unreadable">导出源文件不可读取。</string>
+    <string name="export_name_invalid">导出文件名无效。</string>
+    <string name="invalid_mime">文件类型无效。</string>
+    <string name="file_picker_error">无法打开系统文件选择器。</string>
+    <string name="import_path_missing">缺少临时文件路径。</string>
+    <string name="import_owned_only">只能清理应用导入的临时文件。</string>
+    <string name="import_cleanup_error">无法清理导入临时文件。</string>
+    <string name="backup_format_unsupported">请选择支持的账本备份文件。</string>
+    <string name="file_read_error">文件无法读取。</string>
+    <string name="export_source_expired">导出源文件已失效。</string>
+    <string name="file_write_error">文件无法写入。</string>
+    <string name="file_io_error">文件操作失败，请检查空间与访问权限。</string>
+    <string name="export_partial_error">导出未完成，所选位置可能留有不完整文件，请删除该文件后重新导出。本机账本保留。</string>
+</resources>

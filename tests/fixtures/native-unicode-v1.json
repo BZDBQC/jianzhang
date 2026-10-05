@@ -1,0 +1,53 @@
+{
+  "unicode": "17.0",
+  "samples": [
+    {
+      "value": "ΟΣ",
+      "lower": "ος"
+    },
+    {
+      "value": "ΌΣ",
+      "lower": "ός"
+    },
+    {
+      "value": "Σ",
+      "lower": "σ"
+    },
+    {
+      "value": "ΑΣΑ",
+      "lower": "ασα"
+    },
+    {
+      "value": "ᾼΣ́",
+      "lower": "ᾳς́"
+    },
+    {
+      "value": "AΣ́B",
+      "lower": "aσ́b"
+    },
+    {
+      "value": "İ",
+      "lower": "i̇"
+    },
+    {
+      "value": "İSTANBUL",
+      "lower": "i̇stanbul"
+    },
+    {
+      "value": "ÉCOLE",
+      "lower": "école"
+    },
+    {
+      "value": "𞤀",
+      "lower": "𞤢"
+    },
+    {
+      "value": "ΣΣ",
+      "lower": "σς"
+    },
+    {
+      "value": "ΑΣ'",
+      "lower": "ας'"
+    }
+  ]
+}

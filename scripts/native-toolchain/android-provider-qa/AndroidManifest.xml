@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.jianzhang.qa.faultprovider" android:versionCode="1" android:versionName="0.0.1-qa">
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
+  <application android:label="简账 QA 故障文件" android:allowBackup="false" android:debuggable="true">
+    <provider android:name=".FaultDocumentsProvider" android:authorities="com.jianzhang.qa.faultprovider.documents" android:exported="true" android:grantUriPermissions="true" android:permission="android.permission.MANAGE_DOCUMENTS">
+      <intent-filter><action android:name="android.content.action.DOCUMENTS_PROVIDER" /></intent-filter>
+    </provider>
+  </application>
+</manifest>

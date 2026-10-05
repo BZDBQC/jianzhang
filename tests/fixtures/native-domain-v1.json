@@ -1,0 +1,761 @@
+{
+  "ledger": {
+    "version": 1,
+    "started": true,
+    "accounts": [
+      {
+        "id": "cash",
+        "name": "现金",
+        "kind": "cash",
+        "openingBalance": 0,
+        "archived": false
+      },
+      {
+        "id": "bank",
+        "name": "银行卡",
+        "kind": "bank",
+        "openingBalance": 0,
+        "archived": false
+      },
+      {
+        "id": "wechat",
+        "name": "微信钱包",
+        "kind": "wallet",
+        "openingBalance": 0,
+        "archived": false
+      }
+    ],
+    "categories": [
+      {
+        "id": "food",
+        "name": "餐饮",
+        "type": "expense",
+        "parentId": null,
+        "icon": "Utensils",
+        "color": "#397665"
+      },
+      {
+        "id": "food-breakfast",
+        "name": "早餐",
+        "type": "expense",
+        "parentId": "food",
+        "icon": "Utensils",
+        "color": "#397665"
+      },
+      {
+        "id": "food-lunch",
+        "name": "午餐",
+        "type": "expense",
+        "parentId": "food",
+        "icon": "Utensils",
+        "color": "#397665"
+      },
+      {
+        "id": "food-dinner",
+        "name": "晚餐",
+        "type": "expense",
+        "parentId": "food",
+        "icon": "Utensils",
+        "color": "#397665"
+      },
+      {
+        "id": "food-drink",
+        "name": "饮品",
+        "type": "expense",
+        "parentId": "food",
+        "icon": "Utensils",
+        "color": "#397665"
+      },
+      {
+        "id": "food-gather",
+        "name": "聚餐",
+        "type": "expense",
+        "parentId": "food",
+        "icon": "Utensils",
+        "color": "#397665"
+      },
+      {
+        "id": "transport",
+        "name": "交通",
+        "type": "expense",
+        "parentId": null,
+        "icon": "TramFront",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "transport-0",
+        "name": "公共交通",
+        "type": "expense",
+        "parentId": "transport",
+        "icon": "TramFront",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "transport-1",
+        "name": "打车",
+        "type": "expense",
+        "parentId": "transport",
+        "icon": "TramFront",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "transport-2",
+        "name": "燃油",
+        "type": "expense",
+        "parentId": "transport",
+        "icon": "TramFront",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "transport-3",
+        "name": "停车",
+        "type": "expense",
+        "parentId": "transport",
+        "icon": "TramFront",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "transport-4",
+        "name": "长途出行",
+        "type": "expense",
+        "parentId": "transport",
+        "icon": "TramFront",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "shopping",
+        "name": "购物",
+        "type": "expense",
+        "parentId": null,
+        "icon": "ShoppingBag",
+        "color": "#c59868"
+      },
+      {
+        "id": "shopping-daily",
+        "name": "日用品",
+        "type": "expense",
+        "parentId": "shopping",
+        "icon": "ShoppingBag",
+        "color": "#c59868"
+      },
+      {
+        "id": "shopping-clothes",
+        "name": "服饰",
+        "type": "expense",
+        "parentId": "shopping",
+        "icon": "ShoppingBag",
+        "color": "#c59868"
+      },
+      {
+        "id": "shopping-digital",
+        "name": "数码",
+        "type": "expense",
+        "parentId": "shopping",
+        "icon": "ShoppingBag",
+        "color": "#c59868"
+      },
+      {
+        "id": "shopping-furniture",
+        "name": "家居",
+        "type": "expense",
+        "parentId": "shopping",
+        "icon": "ShoppingBag",
+        "color": "#c59868"
+      },
+      {
+        "id": "home",
+        "name": "居住",
+        "type": "expense",
+        "parentId": null,
+        "icon": "House",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "home-0",
+        "name": "房租",
+        "type": "expense",
+        "parentId": "home",
+        "icon": "House",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "home-1",
+        "name": "房贷",
+        "type": "expense",
+        "parentId": "home",
+        "icon": "House",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "home-2",
+        "name": "水电燃气",
+        "type": "expense",
+        "parentId": "home",
+        "icon": "House",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "home-3",
+        "name": "物业",
+        "type": "expense",
+        "parentId": "home",
+        "icon": "House",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "home-4",
+        "name": "维修",
+        "type": "expense",
+        "parentId": "home",
+        "icon": "House",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "fun",
+        "name": "休闲娱乐",
+        "type": "expense",
+        "parentId": null,
+        "icon": "Headphones",
+        "color": "#6d9a99"
+      },
+      {
+        "id": "fun-0",
+        "name": "影音",
+        "type": "expense",
+        "parentId": "fun",
+        "icon": "Headphones",
+        "color": "#6d9a99"
+      },
+      {
+        "id": "fun-1",
+        "name": "游戏",
+        "type": "expense",
+        "parentId": "fun",
+        "icon": "Headphones",
+        "color": "#6d9a99"
+      },
+      {
+        "id": "fun-2",
+        "name": "运动",
+        "type": "expense",
+        "parentId": "fun",
+        "icon": "Headphones",
+        "color": "#6d9a99"
+      },
+      {
+        "id": "fun-3",
+        "name": "旅行",
+        "type": "expense",
+        "parentId": "fun",
+        "icon": "Headphones",
+        "color": "#6d9a99"
+      },
+      {
+        "id": "health",
+        "name": "医疗健康",
+        "type": "expense",
+        "parentId": null,
+        "icon": "HeartPulse",
+        "color": "#b5a36e"
+      },
+      {
+        "id": "health-0",
+        "name": "门诊",
+        "type": "expense",
+        "parentId": "health",
+        "icon": "HeartPulse",
+        "color": "#b5a36e"
+      },
+      {
+        "id": "health-1",
+        "name": "药品",
+        "type": "expense",
+        "parentId": "health",
+        "icon": "HeartPulse",
+        "color": "#b5a36e"
+      },
+      {
+        "id": "health-2",
+        "name": "体检",
+        "type": "expense",
+        "parentId": "health",
+        "icon": "HeartPulse",
+        "color": "#b5a36e"
+      },
+      {
+        "id": "study",
+        "name": "学习成长",
+        "type": "expense",
+        "parentId": null,
+        "icon": "BookOpen",
+        "color": "#a27d7d"
+      },
+      {
+        "id": "study-0",
+        "name": "书籍",
+        "type": "expense",
+        "parentId": "study",
+        "icon": "BookOpen",
+        "color": "#a27d7d"
+      },
+      {
+        "id": "study-1",
+        "name": "课程",
+        "type": "expense",
+        "parentId": "study",
+        "icon": "BookOpen",
+        "color": "#a27d7d"
+      },
+      {
+        "id": "study-2",
+        "name": "考试",
+        "type": "expense",
+        "parentId": "study",
+        "icon": "BookOpen",
+        "color": "#a27d7d"
+      },
+      {
+        "id": "social",
+        "name": "人情往来",
+        "type": "expense",
+        "parentId": null,
+        "icon": "Gift",
+        "color": "#779184"
+      },
+      {
+        "id": "social-0",
+        "name": "礼物",
+        "type": "expense",
+        "parentId": "social",
+        "icon": "Gift",
+        "color": "#779184"
+      },
+      {
+        "id": "social-1",
+        "name": "红包",
+        "type": "expense",
+        "parentId": "social",
+        "icon": "Gift",
+        "color": "#779184"
+      },
+      {
+        "id": "social-2",
+        "name": "请客",
+        "type": "expense",
+        "parentId": "social",
+        "icon": "Gift",
+        "color": "#779184"
+      },
+      {
+        "id": "other",
+        "name": "其他支出",
+        "type": "expense",
+        "parentId": null,
+        "icon": "Ellipsis",
+        "color": "#397665"
+      },
+      {
+        "id": "other-fee",
+        "name": "手续费",
+        "type": "expense",
+        "parentId": "other",
+        "icon": "Ellipsis",
+        "color": "#397665"
+      },
+      {
+        "id": "other-uncategorized",
+        "name": "未分类",
+        "type": "expense",
+        "parentId": "other",
+        "icon": "Ellipsis",
+        "color": "#397665"
+      },
+      {
+        "id": "salary",
+        "name": "工作收入",
+        "type": "income",
+        "parentId": null,
+        "icon": "Wallet",
+        "color": "#397665"
+      },
+      {
+        "id": "salary-main",
+        "name": "工资",
+        "type": "income",
+        "parentId": "salary",
+        "icon": "Wallet",
+        "color": "#397665"
+      },
+      {
+        "id": "salary-1",
+        "name": "奖金",
+        "type": "income",
+        "parentId": "salary",
+        "icon": "Wallet",
+        "color": "#397665"
+      },
+      {
+        "id": "salary-2",
+        "name": "补贴",
+        "type": "income",
+        "parentId": "salary",
+        "icon": "Wallet",
+        "color": "#397665"
+      },
+      {
+        "id": "side",
+        "name": "副业收入",
+        "type": "income",
+        "parentId": null,
+        "icon": "Wallet",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "side-0",
+        "name": "接单",
+        "type": "income",
+        "parentId": "side",
+        "icon": "Wallet",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "side-1",
+        "name": "兼职",
+        "type": "income",
+        "parentId": "side",
+        "icon": "Wallet",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "side-2",
+        "name": "稿费",
+        "type": "income",
+        "parentId": "side",
+        "icon": "Wallet",
+        "color": "#7d94b5"
+      },
+      {
+        "id": "invest",
+        "name": "投资收益",
+        "type": "income",
+        "parentId": null,
+        "icon": "Wallet",
+        "color": "#c59868"
+      },
+      {
+        "id": "invest-0",
+        "name": "利息",
+        "type": "income",
+        "parentId": "invest",
+        "icon": "Wallet",
+        "color": "#c59868"
+      },
+      {
+        "id": "invest-1",
+        "name": "分红",
+        "type": "income",
+        "parentId": "invest",
+        "icon": "Wallet",
+        "color": "#c59868"
+      },
+      {
+        "id": "invest-2",
+        "name": "投资盈利",
+        "type": "income",
+        "parentId": "invest",
+        "icon": "Wallet",
+        "color": "#c59868"
+      },
+      {
+        "id": "income-other",
+        "name": "其他收入",
+        "type": "income",
+        "parentId": null,
+        "icon": "Wallet",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "income-other-0",
+        "name": "礼金",
+        "type": "income",
+        "parentId": "income-other",
+        "icon": "Wallet",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "income-other-1",
+        "name": "补助",
+        "type": "income",
+        "parentId": "income-other",
+        "icon": "Wallet",
+        "color": "#9d88a9"
+      },
+      {
+        "id": "income-other-2",
+        "name": "未分类",
+        "type": "income",
+        "parentId": "income-other",
+        "icon": "Wallet",
+        "color": "#9d88a9"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "expense",
+        "type": "expense",
+        "amount": 1234,
+        "fee": 0,
+        "date": "2026-10-04T12:30",
+        "accountId": "bank",
+        "toAccountId": "",
+        "categoryId": "food-lunch",
+        "note": "公司 午餐 中文🙂",
+        "createdAt": "2026-10-04T12:30"
+      },
+      {
+        "id": "income",
+        "type": "income",
+        "amount": 10000,
+        "fee": 0,
+        "date": "2026-10-04T12:30",
+        "accountId": "bank",
+        "toAccountId": "",
+        "categoryId": "salary-main",
+        "note": "公司 午餐 中文🙂",
+        "createdAt": "2026-10-04T12:30"
+      },
+      {
+        "id": "transfer",
+        "type": "transfer",
+        "amount": 25000,
+        "fee": 234,
+        "date": "2026-10-04T12:30",
+        "accountId": "bank",
+        "toAccountId": "cash",
+        "categoryId": "other-fee",
+        "note": "公司 午餐 中文🙂",
+        "createdAt": "2026-10-04T12:30"
+      },
+      {
+        "id": "nofee",
+        "type": "transfer",
+        "amount": 10000,
+        "fee": 0,
+        "date": "2026-10-04T12:30",
+        "accountId": "bank",
+        "toAccountId": "wechat",
+        "categoryId": "",
+        "note": "公司 午餐 中文🙂",
+        "createdAt": "2026-10-04T12:30"
+      },
+      {
+        "id": "shopping",
+        "type": "expense",
+        "amount": 3400,
+        "fee": 0,
+        "date": "2026-10-04T12:30",
+        "accountId": "bank",
+        "toAccountId": "",
+        "categoryId": "shopping-daily",
+        "note": "=1+1,\n\"中文\"",
+        "createdAt": "2026-10-04T12:30"
+      },
+      {
+        "id": "edge",
+        "type": "expense",
+        "amount": 10,
+        "fee": 0,
+        "date": "2026-10-31T23:59",
+        "accountId": "bank",
+        "toAccountId": "",
+        "categoryId": "food-lunch",
+        "note": "公司 午餐 中文🙂",
+        "createdAt": "2026-10-04T12:30"
+      }
+    ],
+    "budgets": [
+      {
+        "month": "2026-10",
+        "categoryId": "",
+        "amount": 10000,
+        "threshold": 50
+      },
+      {
+        "month": "2026-10",
+        "categoryId": "other",
+        "amount": 234,
+        "threshold": 100
+      }
+    ],
+    "settings": {
+      "defaultAccount": "bank",
+      "notifications": true,
+      "notified": []
+    }
+  },
+  "summary": {
+    "income": 10000,
+    "expense": 4878,
+    "balance": 5122,
+    "count": 6
+  },
+  "balances": {
+    "cash": 25000,
+    "bank": -29878,
+    "wechat": 10000
+  },
+  "categoryTotals": [
+    {
+      "id": "shopping",
+      "amount": 3400
+    },
+    {
+      "id": "food",
+      "amount": 1244
+    },
+    {
+      "id": "other",
+      "amount": 234
+    }
+  ],
+  "budgetSpent": [
+    4878,
+    234
+  ],
+  "filters": [
+    {
+      "filter": {},
+      "ids": [
+        "expense",
+        "income",
+        "transfer",
+        "nofee",
+        "shopping",
+        "edge"
+      ]
+    },
+    {
+      "filter": {
+        "types": [
+          "expense"
+        ],
+        "includeFees": true,
+        "amountOp": "eq",
+        "amountMin": "2.34"
+      },
+      "ids": [
+        "transfer"
+      ]
+    },
+    {
+      "filter": {
+        "types": [
+          "expense"
+        ],
+        "includeFees": true,
+        "accountIds": [
+          "cash"
+        ]
+      },
+      "ids": []
+    },
+    {
+      "filter": {
+        "types": [
+          "expense"
+        ],
+        "includeFees": true,
+        "accountIds": [
+          "bank"
+        ],
+        "amountOp": "range",
+        "amountMin": "2.34",
+        "amountMax": "12.34"
+      },
+      "ids": [
+        "expense",
+        "transfer"
+      ]
+    },
+    {
+      "filter": {
+        "categoryIds": [
+          "food",
+          "shopping"
+        ],
+        "subIds": [
+          "food-lunch"
+        ]
+      },
+      "ids": [
+        "expense",
+        "shopping",
+        "edge"
+      ]
+    },
+    {
+      "filter": {
+        "accountIds": [
+          "cash"
+        ],
+        "accountMode": "in"
+      },
+      "ids": [
+        "transfer"
+      ]
+    },
+    {
+      "filter": {
+        "accountIds": [
+          "bank"
+        ],
+        "accountMode": "out"
+      },
+      "ids": [
+        "expense",
+        "income",
+        "transfer",
+        "nofee",
+        "shopping",
+        "edge"
+      ]
+    },
+    {
+      "filter": {
+        "note": "公司 中文",
+        "noteMode": "all"
+      },
+      "ids": [
+        "expense",
+        "income",
+        "transfer",
+        "nofee",
+        "edge"
+      ]
+    },
+    {
+      "filter": {
+        "note": "缺失 中文",
+        "noteMode": "any"
+      },
+      "ids": [
+        "expense",
+        "income",
+        "transfer",
+        "nofee",
+        "shopping",
+        "edge"
+      ]
+    },
+    {
+      "filter": {
+        "start": "2026-10-31",
+        "end": "2026-10-31"
+      },
+      "ids": [
+        "edge"
+      ]
+    }
+  ],
+  "csv": "﻿\"类型\",\"金额（元）\",\"日期时间\",\"大类\",\"小类\",\"账户 / 转出账户\",\"转入账户\",\"手续费（元）\",\"备注\"\r\n\"支出\",\"12.34\",\"2026-10-04 12:30\",\"餐饮\",\"午餐\",\"银行卡\",\"\",\"0\",\"公司 午餐 中文🙂\"\r\n\"收入\",\"100\",\"2026-10-04 12:30\",\"工作收入\",\"工资\",\"银行卡\",\"\",\"0\",\"公司 午餐 中文🙂\"\r\n\"转账\",\"250\",\"2026-10-04 12:30\",\"其他支出\",\"手续费\",\"银行卡\",\"现金\",\"2.34\",\"公司 午餐 中文🙂\"\r\n\"转账\",\"100\",\"2026-10-04 12:30\",\"\",\"\",\"银行卡\",\"微信钱包\",\"0\",\"公司 午餐 中文🙂\"\r\n\"支出\",\"34\",\"2026-10-04 12:30\",\"购物\",\"日用品\",\"银行卡\",\"\",\"0\",\"'=1+1,\n\"\"中文\"\"\"\r\n\"支出\",\"0.1\",\"2026-10-31 23:59\",\"餐饮\",\"午餐\",\"银行卡\",\"\",\"0\",\"公司 午餐 中文🙂\""
+}

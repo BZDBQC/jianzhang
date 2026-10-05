@@ -43,3 +43,51 @@ NSIS、构建器、安装器或注册表。已有 `verify-packaging.ps1` 纳入�
 原始整包失败对应根代理 tool chunk `8364f9`、session `29688`、exit 1。
 该次未保存 Tee 日志，因此这里不引用不存在的整包日志文件；上述独立
 文件 fixture 是可重复的主要故障证据。
+# 1175 发布失败的后续诊断
+
+此前 `$null` 重载问题的修复和 10 项纯文件回归没有证明真实安装包
+可以覆盖发布。Root 的完整打包会话 `45498`（工具输出块 `d01332`）
+随后在实际 `File.Replace` 操作中报告“无法删除要被替换的文件”；该错误
+被记录为待解释的 1175 发布失败。原会话没有保存异常 HRESULT 或日志
+文件，因此不能用不存在的日志或后续成功副本实验代替原始失败证据。
+
+本轮没有重试或替换真实旧 Output。其 SHA-256 仍为
+`0b9d97a963110aa461a30aa27fa025096964e92bad69f55576143ec9d879855f`，
+保留候选包为
+`19b951615be749e84e4b0834ab022d5c2d4bf57f5980ffdd2778dbb3e99cbe54`。
+真实文件的普通共享探针、属性和权限检查，以及同目录、跨目录真实 PE
+副本上的替换均通过。普通文件映射和两种映像映射下的副本替换也通过。
+这些证据不证明原失败时没有占用，不足以把原因归于权限、映像映射、
+安全软件或临时 I/O；没有修改系统设置，也没有运行注册表探针。
+
+证据文件：
+
+- `.qa/package-1175-file-metadata.json`、
+  `.qa/package-1175-sharing-probes.json`、
+  `.qa/package-1175-parent-metadata.json`。
+- `.qa/package-1175-pe-copy-356f6fd8230c45ca990e230adab3b49d/evidence.json`。
+- `.qa/package-1175-map-dd4047e1d1494632816df9c6dd67181e/evidence.json`。
+
+最小源码变更仅给原子发布增加持久诊断。每次发布在本轮唯一
+`installer-input-*` 目录中先保存 `artifact-publication-before.json`；
+失败时保存 `artifact-publication-failure.json`，包含异常链的类型、
+HRESULT、Win32 错误码、原始异常字符串和调用位置，以及候选 EXE、
+旧 EXE、旧 manifest 的前后长度、属性、SHA-256。若占用导致哈希不可读，
+诊断保留已经读到的属性并明确记录 `readError`。它不会声称这时已证明
+文件字节未变。错误仍会抛出，不自动重试，不先删除旧包。
+
+生产发布函数的 11 项纯文件回归连续两次通过，输出分别为：
+
+- `.qa/package-publication-2e32d56bcfec4ff0a3a59655721e51a8/evidence.json`。
+- `.qa/package-publication-e361245786da499b88c0d3f78e925a58/evidence.json`。
+
+故障覆盖旧包占用、候选包占用、旧包只读、候选缺失及诊断目录不可用。
+前四项核对持久诊断与实际抛出的最内层异常一致，包括错误码、原始
+异常及调用位置；全部故障核对已有 EXE、已有 manifest 及适用的候选
+字节保持不变。正常首次发布和覆盖发布保留原子 Move/Replace 行为。
+此次验证不包含完整 NSIS 打包或真实安装；原 1175 覆盖发布仍待受控
+复现及独立审查，不作为已经修复或安装验收通过。
+
+[Microsoft 的 ReplaceFileW 文档](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew)
+说明 1175 时两文件保留原名，而其他特定错误可能具有不同结果。
+本轮没有因此引入任何重试，也没有改用忽略属性或 ACL 错误的选项。

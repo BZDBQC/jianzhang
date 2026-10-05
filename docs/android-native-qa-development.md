@@ -27,6 +27,9 @@
 - API 37 新 QA 分区配合 `-qt-hide-window` 能 boot、确认 page 16384，但未安装应用即再次发生相同 mapper/SF 错误。证据 `.qa/android-api37-qt-clean-3/gesture-boot-device.log` 与 `initial-overlays.txt`；默认 gestural 开启。尝试切 threebutton 的 overlay binder 命令阻塞，终止了唯一该命令客户端；console TCP 未回应，未取得可信截图。已结束这次诊断并恢复 API 35，不停用 SystemUI，也不把此环境阻断算作客户端通过。
 - 这一实验曾误用 `-data` 与 `-wipe-data/-initdata`，以为只清理独占新分区；实际 emulator 先清理默认 API 37 QA userdata，导致初始化源失效。已报告并禁用该组合；仅此前无账单的 API 37 QA 分区受影响，API 26 的升级 marker、API 35 数据及所有原日志保留。后续独占新分区启动不带 `-wipe-data`，不能声称旧 API 37 分区已保留。
 - SAF 停滞测试早期手势在系统选择器过渡尚未完成时点击导航，另一次断言假定“正在处理文件”是单独 semantics 节点；实际它与卡片文本合并，修复观察方法后完整运行。最后用关闭前后 `DB+WAL` 字节 SHA 比较导致 QA 假失败：正常关闭 checkpoint 会把 WAL 提交到主数据库并删除 WAL。保存此失败，另以只读 SQLite `integrity_check`、账单与暂存表行数及重新打开 UI 核对数据，不以文件布局变化判断账单变化。
+- R9 合法 SAF 文件检查未进入预览：`.qa/android-saf-release-r9b/evidence.json` 与 `011-valid-file.xml` 记录系统 Downloads 的最新条目都是该轮新建的 UI dump。旧脚本每轮把 XML 写入 Downloads，改变按时间排序并持续挤走目标 JSON。这是 QA 自污染失败，不能推断为客户端拒绝合法文件。失败证据保留；改为 `/data/local/tmp` 的独有临时路径，系统 Search 输入唯一文件名并只接受精确同名的文档标题，排除查询框同名文本。
+- 此修复的 8 项纯 fixture 已通过，证据 `.qa/android-saf-pure-fixtures-2112211c055b48ba8b246fa3286eec7b/result.json`。它们使用模拟 ADB，只验证路径、精确搜索、错误/空/重复结果拒绝以及真实 SHA 守卫；未执行设备操作。脚本仍要求合法 JSON 的真实 6 笔预览、用户取消、cache 释放和所有领域表 SQL 不变。新脚本的设备复测尚未完成。
+- 根代理 R9 的十万笔 profile 整场执行结束通过，但 Flutter drive 默认成功后卸载应用，尚未 pull 的 raw metrics 随应用被删除。此次不能作为正式性能证据；需使用 `--keep-app-running` 重测并归档实际原始记录，不重构已经消失的数据，也不将 QA 卸载行为归因于产品。
 
 ## 已知产品缺陷
 
@@ -38,7 +41,20 @@
 - `scripts/native-toolchain/test-android-ui.ps1`：实际生产 APK 触控检查；每次输出独立目录、唯一备注及临时 sdcard 路径；恢复原网络/旋转设置；错误保留原始 cause 与清理错误。
 - `scripts/native-toolchain/measure-android-startup.ps1`：至少 20 次 release `force-stop` 冷启动；完整已安装 APK SHA、源码 manifest、原生 ledger-loaded 回调与新 PID 验证；通过唯一 QA log marker 隔离每次日志，采样 AMS `Fully drawn`，不依赖受拒绝的 `logcat -c`，不把 `am start -W` first frame 当账本就绪。
 - `scripts/native-toolchain/test-android-saf.ps1`：当前可复用脚本加入合法 JSON 真实预览与主动取消、三种故障、全表 SQL 摘要、临时 cache、交付本地 APK 与安装 APK 及源码前后守卫；新增正常路径尚待实际运行。已执行的故障开发证据与未执行的新脚本分开记录。
+- `tests/native-qa/android-saf-script-fixtures.ps1`：无设备的 SAF 脚本回归。提取并执行实际搜索函数与 SHA 条件，模拟输入/查询 XML；每次结果写入全新 `.qa/android-saf-pure-fixtures-<UUID>`。两个脚本的 PowerShell parser 均无错误，本机未安装 PSScriptAnalyzer，未声称运行该分析器。
 
 新增脚本的独立审查及设备实测仍在进行，不能把脚本语法解析通过当正式验收。
 
 性能固定配置的 `ramMB=2048` 是分配参数；`guestMemTotalKB=2532436` 是首次启动观测基线。API 35 后续启动实测 2532432 KB，相差一个 4 KB 系统保留页，不表示分配参数变更。每轮 raw 必须另外记录实际 MemTotal、page size、geometry、CPU、renderer，不能把首次基线冒充本轮观测；固定配置 canonical hash 继续由根代理统一管理。
+
+## 2026-10-05：R12 正式 APK 的实际 SAF 回归首次失败于系统搜索框选择器
+
+API35 按已有审核 `start-emulator.ps1` 正常启动，owned emulator PID15428；boot_complete=1、activity 正常、PAGE_SIZE=4096、SurfaceFlinger PID442，保持运行交回根代理。当前 R12 正式 APK SHA-256 为 `476ed43a0d40a90fa618cd474ff16aae6913d72ddd222a9d6aca257150846b4c`，当前源码守卫和本地签名校验通过，`adb install -r` exit0，同签名升级未清理 owned QA 账本。设备 APK 哈希与原故障 Provider APK 哈希均匹配各自 manifest。
+
+直接执行未修改的、R11已审核 SAF 脚本（SHA204fff...），buildId=`2.0.0-3-r12`、roundId=`dev-r12-saf`。真实执行退出码1，`evidence.json` status=failed、cases=[]、cleanupErrors=[]：在选择合法JSON之前，Find-SearchEditor 抛出 `System file search editor is missing.`。因此四个实际案例都尚未完成，不计为产品缺陷或验收通过。
+
+连续四份 XML（009至012）都包含实际搜索框：`android.widget.AutoCompleteTextView`，resource-id=`com.android.documentsui:id/search_src_text`，而脚本只接受 `android.widget.EditText`。截图 `saf-search-failure.png` 与 `selector-diagnosis.json` 保存了实际系统界面和选择器差异。没有修改/绕过来源守卫、生产源码、故障Provider或SAF脚本；后续应补选择器兼容回归、独立审查并重新完成四案例。日志中的 JSON depth5 截断 warning 保留，不能以它替代真正失败原因。补诊断时一次PowerShell单元素XML索引错误仅影响诊断JSON生成，已改为显式XPath数组读取并完成记录，原脚本及原失败证据未改写。
+
+本轮目录：`
+.qa/android-saf-release-r12-a6f17675b601489b8a36b9376fd2f38c
+`；`saf-execution.json` 保留调用参数、开始/结束时刻和exit1，`cases/` 保留命令、SQL baseline及UI XML。失败后已结束测试操作、回系统首页并force-stop owned客户端；`handoff.json` 复核API35仍就绪，emulator15428和SurfaceFlinger442仍在，设备交回根代理用于后续测试，没有启动性能/冷启动测量，也没有关闭AVD。

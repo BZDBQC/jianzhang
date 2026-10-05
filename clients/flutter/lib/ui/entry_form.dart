@@ -25,8 +25,17 @@ Future<void> showEntry(
   return showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (_) =>
-        EntryForm(entry: entry, duplicate: duplicate, openedView: openedView),
+    builder: (dialogContext) => CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            Navigator.maybePop(dialogContext),
+      },
+      child: EntryForm(
+        entry: entry,
+        duplicate: duplicate,
+        openedView: openedView,
+      ),
+    ),
   );
 }
 

@@ -7,13 +7,13 @@ $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLower
 $tokens = $null; $parseErrors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$parseErrors)
 if($parseErrors.Count) { throw 'Packaging script could not be parsed.' }
-$statements = @($ast.FindAll({param($node)
-  $node -is [Management.Automation.Language.IfStatementAst] -and
-  $node.Extent.Text -match '\[IO\.File\]::Replace\('
+$definitions = @($ast.FindAll({param($node)
+  $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+  $node.Name -in @('Get-ArtifactPublicationState','Publish-InstallerArtifact')
 },$true))
-if($statements.Count -ne 1) { throw 'Expected one production artifact publication statement.' }
-# Execute the actual production statement, without invoking NSIS/build/install.
-$publication = [scriptblock]::Create($statements[0].Extent.Text)
+if($definitions.Count -ne 2) { throw 'Expected production artifact publication functions.' }
+# Load only actual production file publication functions, without NSIS/build/install.
+foreach($definition in $definitions) { . ([scriptblock]::Create($definition.Extent.Text)) }
 if(!$EvidenceRoot) { $EvidenceRoot = Join-Path $workspace ('.qa/package-publication-'+[Guid]::NewGuid().ToString('N')) }
 $EvidenceRoot = [IO.Path]::GetFullPath($EvidenceRoot)
 if(!$EvidenceRoot.StartsWith((Join-Path $workspace '.qa')+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) {
@@ -36,9 +36,10 @@ function Assert-Same([string]$Path,[string]$Expected,[string]$Label) {
   if(!(Test-Path -LiteralPath $Path -PathType Leaf) -or (Hash $Path) -ne $Expected) { throw "$Label bytes changed or disappeared." }
 }
 function Invoke-Publication($Scenario) {
-  $candidate = $Scenario.candidate
-  $Output = $Scenario.output
-  & $publication
+  $diagnosticRoot=Join-Path ([IO.Path]::GetDirectoryName($Scenario.output)) ('diagnostics-'+[Guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Path $diagnosticRoot | Out-Null
+  $Scenario | Add-Member -NotePropertyName diagnosticRoot -NotePropertyValue $diagnosticRoot -Force
+  Publish-InstallerArtifact -CandidatePath $Scenario.candidate -OutputPath $Scenario.output -DiagnosticRoot $diagnosticRoot
 }
 function New-Scenario([string]$Name,[bool]$Existing=$true) {
   $root = Join-Path $EvidenceRoot $Name
@@ -57,6 +58,12 @@ function Assert-Published($Scenario,[string]$Name) {
   if(Test-Path -LiteralPath $Scenario.candidate) { throw "$Name did not consume the staged candidate." }
   if(@(Get-ChildItem -LiteralPath ([IO.Path]::GetDirectoryName($Scenario.output)) -File -Force).Count -ne 2) {
     throw "$Name left unexpected publication or backup files."
+  }
+  $before=Get-Content -LiteralPath (Join-Path $Scenario.diagnosticRoot 'artifact-publication-before.json') -Raw | ConvertFrom-Json
+  if($before.candidate.sha256 -ne $Scenario.candidateHash -or
+     $before.manifest.sha256 -ne $Scenario.manifestHash -or
+     (Test-Path -LiteralPath (Join-Path $Scenario.diagnosticRoot 'artifact-publication-failure.json'))) {
+    throw "$Name lacks accurate pre-publication state or reports a false failure."
   }
   $results.Add([pscustomobject]@{name=$Name;passed=$true;outputHash=(Hash $Scenario.output);sidecarUnchanged=$true})
 }
@@ -78,10 +85,26 @@ function Assert-Rejected($Scenario,[string]$Mode) {
   }
   if(!$caught) { throw "$Mode unexpectedly published." }
   while($caught.InnerException) { $caught=$caught.InnerException }
+  $diagnosticPath=Join-Path $Scenario.diagnosticRoot 'artifact-publication-failure.json'
+  if(!(Test-Path -LiteralPath $diagnosticPath -PathType Leaf)) { throw "$Mode lacks persistent failure diagnostics." }
+  $diagnostic=Get-Content -LiteralPath $diagnosticPath -Raw | ConvertFrom-Json
+  $native=$diagnostic.exceptions[-1]
+  if($diagnostic.status -ne 'failed' -or $diagnostic.retryAttempted -ne $false -or
+     $native.hresult -ne ('0x'+$caught.HResult.ToString('x8')) -or
+     $native.type -ne $caught.GetType().FullName -or !$diagnostic.scriptStack -or
+     !$diagnostic.exceptionText -or !$diagnostic.position -or
+     $native.win32 -ne ($caught.HResult -band 0xffff) -or
+     $diagnostic.before.candidate.path -ne $Scenario.candidate -or
+     $diagnostic.after.output.path -ne $Scenario.output -or
+     !$diagnostic.before.output.attributes -or !$diagnostic.after.output.attributes -or
+     $diagnostic.before.manifest.sha256 -ne $Scenario.manifestHash -or
+     $diagnostic.after.manifest.sha256 -ne $Scenario.manifestHash) {
+    throw "$Mode diagnostics lost original exception or file state."
+  }
   Assert-Same $Scenario.output $Scenario.oldHash "$Mode prior installer"
   Assert-Same $Scenario.manifest $Scenario.manifestHash "$Mode prior manifest"
   if($Mode -ne 'missing-candidate') { Assert-Same $Scenario.candidate $Scenario.candidateHash "$Mode staged candidate" }
-  $results.Add([pscustomobject]@{name=$Mode;passed=$true;exception=$caught.GetType().FullName;hresult=$caught.HResult;message=$caught.Message;oldInstallerUnchanged=$true;oldManifestUnchanged=$true})
+  $results.Add([pscustomobject]@{name=$Mode;passed=$true;exception=$caught.GetType().FullName;hresult=$caught.HResult;message=$caught.Message;oldInstallerUnchanged=$true;oldManifestUnchanged=$true;diagnosticPath=$diagnosticPath;originalExceptionPreserved=$true;retryAttempted=$false})
 }
 $failed = $null
 try {
@@ -105,12 +128,22 @@ try {
       Assert-Published $scenario "$mode-retry"
     }
   }
+  $scenario=New-Scenario 'diagnostic-storage-failure'
+  $occupiedRoot=Join-Path ([IO.Path]::GetDirectoryName($scenario.output)) 'not-a-directory'
+  [IO.File]::WriteAllText($occupiedRoot,'Keep this owned fixture file.')
+  $caught=$null
+  try { Publish-InstallerArtifact -CandidatePath $scenario.candidate -OutputPath $scenario.output -DiagnosticRoot $occupiedRoot } catch { $caught=$_.Exception }
+  if(!$caught) { throw 'Unavailable diagnostic storage unexpectedly published.' }
+  Assert-Same $scenario.output $scenario.oldHash 'Diagnostic storage failure prior installer'
+  Assert-Same $scenario.manifest $scenario.manifestHash 'Diagnostic storage failure prior manifest'
+  Assert-Same $scenario.candidate $scenario.candidateHash 'Diagnostic storage failure staged candidate'
+  $results.Add([pscustomobject]@{name='diagnostic-storage-failure';passed=$true;oldInstallerUnchanged=$true;oldManifestUnchanged=$true;candidateUnchanged=$true;publicationNotAttempted=$true})
   if((Hash $source) -ne $sourceHash) { throw 'Production packaging source changed during fixtures.' }
 } catch {
   $failed=$_.Exception
   while($failed.InnerException) { $failed=$failed.InnerException }
 } finally {
-  [pscustomobject]@{schemaVersion=1;passed=($null -eq $failed);source=$source;sourceSha256=$sourceHash;publication=$statements[0].Extent.Text;powershell=$PSVersionTable.PSVersion.ToString();dotnet=[Environment]::Version.ToString();evidenceRoot=$EvidenceRoot;tests=$results.ToArray();failure=$(if($failed){$failed.Message}else{$null});scope='File-only fixtures executing production publication statement; no build, NSIS, installer or registry operations'} |
+  [pscustomobject]@{schemaVersion=1;passed=($null -eq $failed);source=$source;sourceSha256=$sourceHash;publication=($definitions.Extent.Text -join "`n");powershell=$PSVersionTable.PSVersion.ToString();dotnet=[Environment]::Version.ToString();evidenceRoot=$EvidenceRoot;tests=$results.ToArray();failure=$(if($failed){$failed.Message}else{$null});scope='File-only fixtures executing production publication functions; no build, NSIS, installer or registry operations'} |
     ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'evidence.json') -Encoding utf8
 }
 if($failed) { throw $failed }

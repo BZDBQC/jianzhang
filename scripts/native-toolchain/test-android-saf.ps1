@@ -15,7 +15,7 @@ if (Test-Path -LiteralPath $output) { throw 'Evidence already exists; choose ano
 New-Item -ItemType Directory -Path $output | Out-Null
 $output=Assert-WorkspacePath -Workspace $workspace -Path $output -PathType Directory
 $adb=Join-Path $workspace '.tools/android-sdk/platform-tools/adb.exe'
-$prefix='/sdcard/Download/jianzhang-saf-'+[Guid]::NewGuid().ToString('N')
+$prefix='/data/local/tmp/jianzhang-saf-'+[Guid]::NewGuid().ToString('N')
 $remoteFiles=[Collections.Generic.List[string]]::new()
 $commands=[Collections.Generic.List[object]]::new()
 $cases=[Collections.Generic.List[object]]::new()
@@ -28,7 +28,7 @@ function Artifact([string]$Name) {
 }
 function Adb([string[]]$Arguments,[switch]$AllowFailure) {
   $at=[DateTimeOffset]::UtcNow.ToString('o')
-  $lines=@(& $adb -s $Serial @Arguments 2>&1)
+  $lines=@(& $adb -s $Serial @Arguments 2>&1 | ForEach-Object { $_.ToString() })
   $script:lastAdbExit=$LASTEXITCODE
   $commands.Add(@{at=$at;finishedAt=[DateTimeOffset]::UtcNow.ToString('o');arguments=@('-s',$Serial)+$Arguments;exitCode=$script:lastAdbExit;output=$lines})
   if ($script:lastAdbExit -ne 0 -and !$AllowFailure) { throw "ADB failed: $($Arguments -join ' '): $($lines -join ' ')" }
@@ -58,6 +58,51 @@ function Find-Node([string]$Pattern,[string]$Name='find') {
   }
   throw "Missing UI: $Pattern"
 }
+function Find-SearchEditor {
+  for ($attempt=0;$attempt -lt 4;$attempt++) {
+    $fields=@(Read-Ui 'valid-search-editor') | Where-Object {
+      $_.class -in @('android.widget.EditText','android.widget.AutoCompleteTextView') -and
+      $_.GetAttribute('resource-id') -in @('android:id/search_src_text','com.android.documentsui:id/search_src_text') -and
+      $_.enabled -eq 'true' -and $_.clickable -eq 'true' -and
+      $_.GetAttribute('visible-to-user') -ne 'false' -and
+      $_.bounds -match '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$' -and
+      [long]$Matches[3] -gt [long]$Matches[1] -and [long]$Matches[4] -gt [long]$Matches[2]
+    }
+    $fields=@($fields)
+    if ($fields.Count -eq 1) { return $fields[0] }
+    if ($fields.Count -gt 1) { throw 'System file search editor is ambiguous.' }
+    Start-Sleep -Milliseconds 250
+  }
+  throw 'System file search editor is missing.'
+}
+function Find-ExactDocument([string]$BaseName) {
+  for ($attempt=0;$attempt -lt 4;$attempt++) {
+    $files=@(Read-Ui 'valid-search-result') | Where-Object {
+      $_.GetAttribute('text') -ceq $BaseName -and
+      $_.class -notin @('android.widget.EditText','android.widget.AutoCompleteTextView') -and
+      $_.GetAttribute('resource-id') -in @('android:id/title','com.android.documentsui:id/title') -and
+      $_.enabled -eq 'true'
+    }
+    $files=@($files)
+    if ($files.Count -eq 1) { return $files[0] }
+    if ($files.Count -gt 1) { throw 'Exact system search document is ambiguous.' }
+    Start-Sleep -Milliseconds 250
+  }
+  throw "Exact system search document was not found: $BaseName"
+}
+function Search-Document([string]$BaseName) {
+  if ($BaseName -notmatch '^jianzhang-valid-[0-9a-f]{32}\.json$') { throw 'Unexpected QA document basename.' }
+  Tap-Node (Find-Node '^(Search|搜索)$' 'valid-search-toolbar')
+  $editor=Find-SearchEditor
+  Tap-Node $editor
+  Adb @('shell','input','keyevent','123') | Out-Null
+  for ($delete=0;$delete -lt $editor.GetAttribute('text').Length;$delete++) {
+    Adb @('shell','input','keyevent','67') | Out-Null
+  }
+  Adb @('shell','input','text',$BaseName) | Out-Null
+  Adb @('shell','input','keyevent','66') | Out-Null
+  return Find-ExactDocument $BaseName
+}
 function Tap-Node($Node) {
   if ($Node.bounds -notmatch '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$') { throw 'Invalid target bounds.' }
   $x=[int](([int]$Matches[1]+[int]$Matches[3])/2)
@@ -85,12 +130,82 @@ function Open-Picker {
   Tap-Node (Find-Node '^恢复 JSON 备份$' 'restore')
   return Read-Ui 'picker'
 }
+function Get-PickerBounds($Node) {
+  if ($Node.GetAttribute('bounds') -notmatch '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$') { return $null }
+  $box=@{left=[long]$Matches[1];top=[long]$Matches[2];right=[long]$Matches[3];bottom=[long]$Matches[4]}
+  if ($box.right -le $box.left -or $box.bottom -le $box.top) { return $null }
+  return $box
+}
+function Test-PickerContains($Outer,$Inner) {
+  return $null -ne $Outer -and $null -ne $Inner -and $Inner.left -ge $Outer.left -and $Inner.top -ge $Outer.top -and $Inner.right -le $Outer.right -and $Inner.bottom -le $Outer.bottom
+}
+function Test-PickerVisible($Node) {
+  for ($ancestor=$Node;$ancestor -is [Xml.XmlElement];$ancestor=$ancestor.ParentNode) {
+    if ($ancestor.GetAttribute('enabled') -eq 'false' -or $ancestor.GetAttribute('visible-to-user') -eq 'false') { return $false }
+  }
+  return $true
+}
+function Get-OpenPickerRoots($Nodes) {
+  $open=[Collections.Generic.List[object]]::new()
+  foreach ($list in $Nodes) {
+    if ($list.GetAttribute('resource-id') -notin @('com.android.documentsui:id/roots_list','android:id/roots_list') -or !(Test-PickerVisible $list)) { continue }
+    $drawer=$list.ParentNode
+    while ($drawer -is [Xml.XmlElement] -and $drawer.GetAttribute('resource-id') -notin @('com.android.documentsui:id/drawer_roots','android:id/drawer_roots')) { $drawer=$drawer.ParentNode }
+    if ($drawer -isnot [Xml.XmlElement] -or !(Test-PickerVisible $drawer)) { continue }
+    $listBounds=Get-PickerBounds $list
+    $drawerBounds=Get-PickerBounds $drawer
+    if (Test-PickerContains $drawerBounds $listBounds) { $open.Add(@{node=$list;bounds=$listBounds;drawerBounds=$drawerBounds}) }
+  }
+  if ($open.Count -gt 1) { throw 'Visible system roots drawer is ambiguous.' }
+  if ($open.Count -eq 1) { return $open[0] }
+  return $null
+}
+function Get-QAProviderRow($Roots) {
+  $titles=@($Roots.node.SelectNodes('.//node') | Where-Object {
+    $_.GetAttribute('text') -ceq '简账 QA 故障文件' -and
+    $_.class -notin @('android.widget.EditText','android.widget.AutoCompleteTextView') -and
+    $_.GetAttribute('resource-id') -in @('android:id/title','com.android.documentsui:id/title') -and
+    $_.enabled -eq 'true' -and (Test-PickerVisible $_) -and (Test-PickerContains $Roots.bounds (Get-PickerBounds $_))
+  })
+  if ($titles.Count -gt 1) { throw 'Exact QA provider inside roots drawer is ambiguous.' }
+  if (!$titles.Count) { return $null }
+  $row=$titles[0]
+  while ($row -is [Xml.XmlElement] -and $row -ne $Roots.node -and $row.GetAttribute('clickable') -ne 'true') { $row=$row.ParentNode }
+  if ($row -isnot [Xml.XmlElement] -or $row -eq $Roots.node -or !(Test-PickerVisible $row)) { return $null }
+  $rowBounds=Get-PickerBounds $row
+  if (!(Test-PickerContains $Roots.bounds $rowBounds) -or !(Test-PickerContains $rowBounds (Get-PickerBounds $titles[0]))) { return $null }
+  return $row
+}
 function Open-Import([string]$Document) {
   $nodes=@(Open-Picker)
-  if (!($nodes | Where-Object { $_.text -eq $Document })) {
-    Tap-Node (Find-Node '^简账 QA 故障文件$' 'provider-root')
+  if (!(Get-OpenPickerRoots $nodes)) {
+    $drawer=Find-Node '^(Show roots|显示根目录)$' 'provider-drawer'
+    $drawerTargets=@($drawer.OwnerDocument.SelectNodes('//node') | Where-Object {
+      ($_.GetAttribute('content-desc') -cmatch '^(Show roots|显示根目录)$' -or $_.GetAttribute('text') -cmatch '^(Show roots|显示根目录)$') -and
+      $_.class -in @('android.widget.ImageButton','android.widget.Button') -and $_.enabled -eq 'true' -and $_.clickable -eq 'true' -and
+      (Test-PickerVisible $_) -and $null -ne (Get-PickerBounds $_)
+    })
+    if ($drawerTargets.Count -ne 1) { throw 'System roots drawer is ambiguous or unavailable.' }
+    Tap-Node $drawerTargets[0]
+    $nodes=@(Read-Ui 'provider-roots-opened')
   }
-  return Find-Node ('^'+[regex]::Escape($Document)+'$') 'provider-document'
+  # Always confirm the actual provider root before considering document titles.
+  # Drawer overlays leave enabled backing documents in the UI hierarchy.
+  $row=$null
+  for ($attempt=0;$attempt -lt 4;$attempt++) {
+    $roots=Get-OpenPickerRoots $nodes
+    if ($roots) { $row=Get-QAProviderRow $roots }
+    if ($row) { break }
+    if ($attempt -lt 3) { Start-Sleep -Milliseconds 250; $nodes=@(Read-Ui 'provider-roots') }
+  }
+  if (!$row) { throw 'Exact QA provider in a visible roots drawer was not found.' }
+  Tap-Node $row
+  for ($attempt=0;$attempt -lt 4;$attempt++) {
+    $documentNode=Find-ExactDocument $Document
+    if (!(Get-OpenPickerRoots @($documentNode.OwnerDocument.SelectNodes('//node'))) -and (Test-PickerVisible $documentNode) -and $null -ne (Get-PickerBounds $documentNode)) { return $documentNode }
+    Start-Sleep -Milliseconds 250
+  }
+  throw 'Exact provider document is not visible or is obscured by the system roots drawer.'
 }
 function Snapshot-Database([string]$Name) {
   # Stopping this QA-owned app makes the DB and optional WAL a consistent copy.
@@ -106,6 +221,9 @@ function Snapshot-Database([string]$Name) {
     $remote=$prefix+'-'+$Name+'.sqlite'+$suffix
     $remoteFiles.Add($remote)
     Adb @('shell','su','0','cp',$source,$remote) | Out-Null
+    # This task's new tmp copy must be readable by adb shell. Never chmod the
+    # private source database or any pre-existing file.
+    Adb @('shell','su','0','chmod','0644',$remote) | Out-Null
     Adb @('pull',$remote,(Artifact ($Name+'.sqlite'+$suffix))) | Out-Null
   }
   $code=@'
@@ -165,7 +283,7 @@ try {
   Open-Picker | Out-Null
   Tap-Node (Find-Node '^(Show roots|显示根目录)$' 'valid-picker-drawer')
   Tap-Node (Find-Node '^(Downloads|下载|下载内容)$' 'valid-downloads')
-  Tap-Node (Find-Node ('^'+[regex]::Escape($validName)+'$') 'valid-file')
+  Tap-Node (Search-Document $validName)
   Find-Node '确认恢复备份' 'valid-preview-title' | Out-Null
   $fixture=Get-Content -LiteralPath $fixturePath -Raw | ConvertFrom-Json
   Find-Node ([regex]::Escape("$(@($fixture.transactions).Count) 笔账单")) 'valid-preview-count' | Out-Null

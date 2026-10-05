@@ -17,6 +17,45 @@ function Assert-OwnedPath([string]$Path) {
   }
   return $resolved
 }
+function Get-ArtifactPublicationState([string]$Path) {
+  $state=[pscustomobject]@{path=$Path;exists=[IO.File]::Exists($Path);length=$null;attributes=$null;sha256=$null;readError=$null}
+  try {
+    $file=Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    $state.exists=$true
+    if($file.PSIsContainer) { throw 'Publication path is a directory.' }
+    $state.length=$file.Length
+    $state.attributes=$file.Attributes.ToString()
+    $state.sha256=(Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  } catch {
+    $errorException=$_.Exception
+    while($errorException.InnerException) { $errorException=$errorException.InnerException }
+    $state.readError=[pscustomobject]@{type=$errorException.GetType().FullName;hresult=('0x'+$errorException.HResult.ToString('x8'));message=$errorException.Message}
+  }
+  return $state
+}
+function Publish-InstallerArtifact([string]$CandidatePath,[string]$OutputPath,[string]$DiagnosticRoot) {
+  # Diagnostic files belong to this already validated, unique packaging input
+  # directory. They never replace the old setup or its sidecar manifest.
+  $before=[pscustomobject]@{candidate=(Get-ArtifactPublicationState $CandidatePath);output=(Get-ArtifactPublicationState $OutputPath);manifest=(Get-ArtifactPublicationState ($OutputPath+'.manifest.json'))}
+  $encoding=[Text.UTF8Encoding]::new($false)
+  [IO.File]::WriteAllText((Join-Path $DiagnosticRoot 'artifact-publication-before.json'),($before | ConvertTo-Json -Depth 7),$encoding)
+  try {
+    # PowerShell coerces ordinary $null to an empty string for this overload.
+    # NullString passes a true null backup path and retains atomic replacement.
+    if(Test-Path -LiteralPath $OutputPath) { [IO.File]::Replace($CandidatePath,$OutputPath,[NullString]::Value) } else { [IO.File]::Move($CandidatePath,$OutputPath) }
+  } catch {
+    $publicationError=$_
+    $chain=[Collections.Generic.List[object]]::new()
+    $errorException=$publicationError.Exception
+    while($errorException) {
+      $chain.Add([pscustomobject]@{type=$errorException.GetType().FullName;hresult=('0x'+$errorException.HResult.ToString('x8'));win32=$(if(($errorException.HResult -band 0x0fff0000) -eq 0x00070000){$errorException.HResult -band 0xffff}else{$null});message=$errorException.Message;stack=$errorException.StackTrace})
+      $errorException=$errorException.InnerException
+    }
+    $failure=[pscustomobject]@{schemaVersion=1;status='failed';phase='atomic-artifact-publication';utc=[DateTime]::UtcNow.ToString('o');before=$before;after=[pscustomobject]@{candidate=(Get-ArtifactPublicationState $CandidatePath);output=(Get-ArtifactPublicationState $OutputPath);manifest=(Get-ArtifactPublicationState ($OutputPath+'.manifest.json'))};exceptions=$chain.ToArray();exceptionText=$publicationError.Exception.ToString();scriptStack=$publicationError.ScriptStackTrace;position=$publicationError.InvocationInfo.PositionMessage;retryAttempted=$false}
+    try { [IO.File]::WriteAllText((Join-Path $DiagnosticRoot 'artifact-publication-failure.json'),($failure | ConvertTo-Json -Depth 9),$encoding) } catch { Write-Warning "Could not write publication diagnostics: $($_.Exception.Message)" }
+    throw $publicationError
+  }
+}
 try {
   $env:TEMP=Join-Path $toolRoot 'installer-temp'; $env:TMP=$env:TEMP
   $env:PUB_CACHE=Join-Path $toolRoot 'pub-cache'; $env:APPDATA=Join-Path $toolRoot 'flutter-config'; $env:LOCALAPPDATA=Join-Path $toolRoot 'flutter-config-local'
@@ -146,9 +185,7 @@ try {
   # Publish by a same-volume rename/replace, preserving the previous setup if
   # the final output is occupied or the atomic replacement cannot be completed.
   $candidateHash=(Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
-  # PowerShell coerces ordinary $null to an empty string for this .NET overload.
-  # NullString passes an actual null backup path while retaining atomic Replace.
-  if(Test-Path -LiteralPath $Output) { [IO.File]::Replace($candidate,$Output,[NullString]::Value) } else { [IO.File]::Move($candidate,$Output) }
+  Publish-InstallerArtifact -CandidatePath $candidate -OutputPath $Output -DiagnosticRoot $generated
   $hash=(Get-FileHash -LiteralPath $Output -Algorithm SHA256).Hash.ToLowerInvariant()
   if($hash -ne $candidateHash) { throw 'Installer changed during atomic publication.' }
   $report=[pscustomobject]@{schemaVersion=2;version=$version.version;versionCode=$version.versionCode;status='candidate';installer=$Output;sha256=$hash;bundle=$Bundle;source=$build.source;buildManifestSha256=$buildManifestHash;buildPayload=$build.payload;payload=$payload;crtVersion=$redist.Name;crt=$crtFiles;packagingInputs=$packagingInputs;transactionHelperSha256=$helperHash;transactionConfigSha256=$configHash;qa=[bool]$QaRoot}

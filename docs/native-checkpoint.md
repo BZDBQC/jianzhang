@@ -85,3 +85,56 @@ Windows 10、安卓真机和真实短信属于明确未验证边界。旧 1.0.1 
 - JSON/CSV/XLSX在原500行检查点合批写出，保留顺序和原子发布。21份完整文件byte golden保持一致；29项导出、备份和中途失败回归通过，新11项经独立复跑通过。待实际API35完整profile验证改善，不能将静态批准当性能达标。
 - 测试工具补全SQL领域摘要、APK/source/manifest前后冻结、取消前缓存存在及实际5秒上限；独审已抓住并关闭过期轮询仍可能误通过的测试缺陷。最终SAF脚本仍在逐增量冻结复核。profile原始采样移至导出前落盘并增加阶段日志，整体成功仍须导出和恢复完成。
 - 生产/QA Windows EXE和APK开始按上述当前源码重建，Windows QA根缩短为 `.qa/i`；完整安装事务、固定配置双端正式性能、最终六API矩阵、原生云接口上线及连续三轮完整回归仍未完成，当前 **0/3**。
+
+## 2026-10-05 18:30 修复循环检查点
+
+- Android release R9 在 Gradle 2GB 堆/2 workers 配置下实际构建成功（81秒）；APK SHA256 `67bf5be16af367559404c22955ac5d4d9a38cf1f4d0127a1bc9099a9d86ccd51`，原签名、versionCode3、16KB ZIP/ELF检查通过。其后新增 Esc 修复，故该 APK 不作为最终当前候选。
+- API35优化后十万笔 profile 的三格式导出、恢复、导航响应及阈值断言全部通过（2分31秒）。Flutter drive 默认结束后卸载 QA 应用，导致原始指标/PNG采集时已不存在；`.qa/android-profile-r9-complete/result.json` 明确 evidence incomplete，不算正式性能验收。后续 Android drive 使用 `--keep-app-running` 并先归档实际指标再卸载或切换签名。
+- 独立审查已批准打包的 PowerShell null 参数最小修复与 Windows 原生键盘测试参数修复。重打包又实际出现 Win32 1175；旧 QA EXE和新候选均完整保留，ACL/属性/通常共享探针及隔离PE复制/映射实验未定位根因，不推断为杀毒软件或盲目重试。下一次使用受控诊断与唯一新输出路径继续完整安装验收。
+- Windows原生640窗口实际DPI106/FlutterDPR1.10417和尺寸收敛、恢复已验证，但 Esc 无法关闭记账表单使 R9b 失败。客户端非可点击关闭遮罩同时禁用 Flutter 默认 Escape；新增局部快捷键调用 `Navigator.maybePop`，由原 PopScope 在保存中阻止退出。新回归运行前2闲时失败/1保存中通过，修复后3项通过、analyzer无问题，生产增量待独审和原生重跑。
+- SAF R9b失败来自测试自己将每次XML放在 Downloads、按时间排到合法JSON前。脚本将XML/截图/SQL副本移到唯一 `/data/local/tmp` 并通过系统搜索精确定位JSON；8纯fixture及parser通过，实际正常6笔预览/取消、可靠错误、损坏JSON和停滞管道尚需独审后重跑，未将纯fixture计为设备通过。
+- API37普通4KB官方镜像 revision6完整大小/SHA1校验通过、SDK Manager安装退出0；独立 `Jianzhang_API37_Normal` 4GB/4核定义已准备，未启动，不把新镜像准备或与旧镜像相同高级特性当运行成功。旧16KB环境失败证据保留。
+- 完整源代码提交 `b3cd9f39e3a47af54a9a2427af56f42ff40589e9` 已推送纳入版本管理，Sites版本4已部署原生云API。真实HTTP7项通过：游客session200/configuredfalse、未登录ledger401、send/verify明确SMS未配置503、logout200、外来Origin403、旧Cookie接口session200；没有发送真实短信。证据 `.qa/native-api-live-r9/evidence.json`。后续仅QA和Esc代码编辑未自动重新发布该版本。
+- 尚须双端R10完整构建/真实安装、SAF/原生窗口、API37及最终六API矩阵、保留原始样本的固定配置性能和同候选连续三轮完整回归；当前 **0/3**。Windows10实机、安卓真机、真实短信边界不变。
+
+## 2026-10-05 18:55 修复循环检查点
+
+- 第11轮独立审查批准 Esc 局部修复（3项回归及同帧保存/Esc边界验证）、SAF 测试隔离（8项纯fixture）和发布诊断（11项fixture），冻结7份源文件。真实设备及安装事务仍须复测，1175原因未定位。
+- 新的只读探索发现 Windows `path_provider` 调用当前用户 `SHGetKnownFolderPath`，不由 APPDATA/LOCALAPPDATA 环境覆盖。现冷启动脚本20次默认启动会打开并更新真实默认数据库；未运行该测速。正在新增显式、严格绑定 `.qa` 和独立样本的数据库参数，正常生产无参数行为不变，配置错误不得回退真实账本；修复后重建并独立审查。
+- API35 `adb emu kill` 返回0但进程未退出；核对路径、AVD和父子PID后，仅停止本任务拥有的23220/22572及其已核实子进程。交接独立官方 API37 Normal 启动验证，不修改原16KB AVD，不绕过 APK 来源守卫。此时最终干净轮次仍为 **0/3**。
+
+## 2026-10-05 19:35 修复循环检查点
+
+- 完整 Flutter 回归171项通过，含真实十万笔恢复/三格式导出/故障与视觉规则；全量analyzer无问题。启动配置10项和PS readiness条件18项分别独立验证；R12/R12b审查文档保留原Int32条件阻断与仅两括号修复证明，不把原阻断抹去。
+- 双端当前生产源码已冻结并重建。Android APK SHA256 `476ed43a0d40a90fa618cd474ff16aae6913d72ddd222a9d6aca257150846b4c`，原签名/2.0.0+3/16KB静态检查通过；Windows生产EXE `releases/windows/Jianzhang-2.0.0-x64-setup-r12.exe` SHA256 `886a844636e867c06fe82967a6d4b5ed6f5858bd69d3c047dc695aade3799dba`，QA EXE `.qa/native-installer-r12-setup.exe` SHA256 `3b040531fe9fc9cebca2d991f149f37c9e1863a40b718f67524e36d3755c888a`。旧1175输出及候选原样保留，新唯一输出成功不等于旧失败原因已查明。
+- Windows完整安装首次实际QA在 `HKCU/Software/Jianzhang/NativeInstallerQA` 创建登记项时被系统拒绝访问、退出2，安装器回滚，0个完整case通过。`.qa/native-windows-installer-r12/installer-results.json`保留失败。已将完整包及已审脚本准备给用户在普通PowerShell运行；复制路径漏斜杠后已提供正斜杠代码块纠正，外部结果尚未收到，不代写通过。
+- Windows原生适配R12c通过：真实640/1024/1600外窗、当前DPI106/DPR1.10417、Ctrl+N/Ctrl+F/Esc、48dp触控目标和窗口最终恢复。9份实际截图及JSON按SHA归档于`.qa/native-windows-adaptation-r12c`。首次R12因root构建标识包含测试不允许的加号退出校验；R12b因DartWorker线程启动异常退出；停止本workspace Gradle/Kotlin后台进程、核实Dart可启动后R12c完成，不推断线程异常根因。
+- 冷启动生产入口已严格隔离SQL；只读启动链探索确认首页不自动调用云身份/系统凭据。`.qa/windows-startup-payload-r12`为经过完整manifest匹配的生产打包payload逐字节复制，未执行installer登记，不算安装验收。真实首样本得到nativeReady后CloseMainWindow失败；独立单样本复现实际window存在/enabled但持续不可见，原因是测量脚本设置Hidden影响首次ShowWindow。正在修正主GUI启动/实际可见条件/失败诊断，原样本不算有效性能。
+- API37普通官方r6/4GB实测软件和标准host后端均在APK安装之前反复SurfaceFlinger SIGABRT、screencap退出134、无可信PNG。软件证据`.qa/android-api37-normal-boot-r11-1a10bafee1a`；标准host证据`.qa/android-api37-normal-host-r12-1cdfd41f439a424f8ae7398692a7f1aa`，host后续日志请求超时且进程自行退出，原因未知，不伪造关闭成功。显式GLDirectMem/共享槽强制开启实验被自动审批以“blocked by policy”拒绝，未执行，也未通过其他工具/配置绕过。官方只读诊断记录在`docs/native-api37-graphics-diagnosis.md`，不把推断当修复。
+- Android测试交接当前R12 API35正常模拟器，继续真实SAF四场景；最终原始30样本性能、20冷启动、其余API矩阵、安装全回归和连续三轮仍待完成，当前 **0/3**。
+
+## 2026-10-05 19:57 修复循环检查点
+
+- 当前R12 release APK 在固定 API35 配置实际完成20次全新进程冷启动，AMS Fully drawn p95 **1422 ms**，低于5000 ms；新PID、native renderer回调、前后安装APK及源manifest SHA均核对。原始样本/日志与实际运行配置保存在`.qa/android-coldstart-r12-release.json`，guest RAM2532436KB/4CPU/4096页与配置一致。这是当前候选的开发性能证据，不计完整干净轮次。
+- SAF首轮实际退出1、四case未完成：DocumentsUI搜索控件为`AutoCompleteTextView`，QA脚本只识别`EditText`。四份实际XML、PNG和安装身份守卫保存在`.qa/android-saf-release-r12-a6f17675b601489b8a36b9376fd2f38c`；正在补严格资源ID/唯一性/控件类型回归再改选择器。原handoff的Home/force-stop仍留下外部picker task；首个冷启动尝试返回DocumentsUI且无客户端PID，退出搜索与picker后才开始上述20样本，不把预检失败当应用崩溃或性能样本。
+- Windows可见窗口测量修复经独审发现最终deadline判定缺口：Refresh越过20ms测试deadline仍接受非零句柄。真实helper延迟刷新RED已留证，作者补最终elapsed判定后17组纯fixture/18 readiness场景通过，等待R12d独审。生产源码未变，不提前运行或记录Windows20样本通过。
+- 用户侧完整安装QA结果仍未收到；API37图形栈环境阻断、最终矩阵及三轮完整回归仍未完成，**0/3**。
+
+## 2026-10-05 20:03 双端冷启动检查点
+
+- R12d 独立复审解除 Windows 最终deadline阻断，迟到句柄的真实helper场景正确拒绝；保留此前blocked资料。实际完整release payload随后完成20次新进程启动，p95 **1772.2725 ms**、最大1776.534ms，低于3000ms。20份样本都有非零自身可见窗口、close成功/exit0、只读SQL完整guest/sequence0/零笔；原始`.qa/windows-coldstart-r12-visible.json`绑定当前安装包886a844…和完整payload ec0d22…，每次SQL放在独立QA目录，未触碰真实账本。
+- 当前候选的Windows与API35 release冷启动指标均达到约定阈值；Windows运行的是与生产安装器内容逐字节一致的完整payload复制，完整安装登记场景仍需外部用户执行，不以此替代安装验收。正在执行当前Windows十万笔profile全场景性能；Android四SAF场景、profile原始证据、最终六API矩阵与连续三轮仍待完成，**0/3**。
+
+## 2026-10-05 20:09 十万笔与文件操作检查点
+
+- 当前Windows profile完整真实驱动通过：保存30样本p95 **160.708ms**、筛选30样本p95 **121.748ms**，929滚动帧中超过50ms为0。三格式全量导出与十万笔恢复成功，5个IO阶段导航10.9–24.0ms、各自事件循环最大间隔28.2–35.9ms。五份原始JSON/PNG按SHA复制到`.qa/windows-performance-r12`，drive日志和当前来源/编译EXE绑定另存，派生summary清楚标明development-performance-pass，不能冒充完整轮次。
+- R13选择器独审20组/真实XML回放9项批准后真实SAF重新退出1，第一case已完成：6笔旧JSON预览后取消、完整domainSQL不变、导入cache清空。随后故障provider选择失败，实际019–022 XML均在Downloads列表；OpenImport没有先展开根目录抽屉。`.qa/android-saf-release-r13/evidence.json`保留1case和真实错误，正在补OpenImport导航回归及最小QA修复，三个故障case仍未完成。客户端APK与源码未改。
+- 官方只读核对发现不同API37.1/16KB r9镜像，声明最小emulator36.5.11而当前37.2.12已满足；原37.0普通r6及ps16k r7都无同包更新，没有同断言修复证明。准备独立安装37.1候选，保留原SDK/AVD，不启动、不强制内部feature；该候选后续须实际SDK major37/page16384/系统PNG和完整回归才可提供兼容证据。
+
+## 2026-10-05 21:09 安卓性能与文件测试检查点
+
+- 当前 R12 Android profile 用预编译 x64 APK实际驱动2分30秒，保持应用运行后在任何卸载之前按设备/主机 SHA 归档全部五份原始 JSON/PNG于`.qa/android-performance-r12`。测试用例执行通过，但性能验收失败：保存30样本 p95 **310.026ms** 超过300ms；查询 p95 **184.527ms** 通过；593滚动帧14帧超过50ms，比例 **2.3609%** 超过1%。派生summary明确development-performance-failed，不计干净轮次。三格式导出/十万笔恢复通过，各IO导航33.7–55.2ms，事件循环最大间隔45.3–61.0ms，均持续响应。正在只读追踪保存和滚动瓶颈，未降低阈值或改样本。
+- 首次profile构建因Gradle JVM native commit失败退出，hs_err原始日志按SHA移出源码快照保存，源合同恢复一致。错误发生时可用pagefile仅78MB，不是已证实的Java heap上限不足。仅停止本任务旧模拟器后保留原2GB Gradle配置重建成功；未改全局pagefile/系统策略。诊断与当前编译来源在`docs/native-android-profile-memory-r12.md`及`.qa/native-android-profile-build-r12b.json`。
+- R14 QA导航独审发现真实drawer叠层中误点背景文档，BLOCKED资料原样保留。R14b增加合法drawer祖先/边界/父行点击验证，43项纯回归、7项完整实际XML回放通过，独审APPROVE只允许真实SAF四场景复测。当前生产APK及源码未变；先安全归档profile证据，再恢复原签名release以执行实际文件操作。
+- 官方不同包API37.1 ps16k r9已通过Java cmdline-tools19安装，并准备独立新AVD `Jianzhang_API37_QPR1_16KB`，标准4CPU/4096MB，无内部feature覆盖。原37.0镜像、AVD与emulator二进制保留。准备结果是prepared-not-booted，尚无SDK37/16KB/系统截图或应用兼容通过结论。CLI23.0先前exit0但缺包的尝试不计安装成功。
+- 用户侧Windows命令再次在解析阶段失败：两行粘成一行导致AmpersandNotAllowed，尚未运行安装脚本。已提供仅一行、全部绝对路径的命令，真实外部完整安装结果仍待返回。最终六API矩阵、安卓性能整改、Windows完整安装及连续三轮未完成，**0/3**。

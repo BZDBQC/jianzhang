@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/ledger_repository.dart';
 
+final initialDatabasePathProvider = Provider<String?>((ref) => null);
+
 final repositoryProvider = FutureProvider<LedgerRepository>((ref) async {
   LedgerRepository? repository;
   var disposed = false;
@@ -21,7 +23,9 @@ final repositoryProvider = FutureProvider<LedgerRepository>((ref) async {
       );
     }
   });
-  final opened = await LedgerRepository.open();
+  final opened = await LedgerRepository.open(
+    path: ref.watch(initialDatabasePathProvider),
+  );
   repository = opened;
   if (disposed) await opened.close();
   return opened;

@@ -208,3 +208,7 @@ Windows R17 actual installer regression: 47/47 passed; QA setup SHA 227b8411e5ca
 - R20独立审查APPROVE，bundled SQLite3.53.4支持RETURNING；182/182和analyze无问题。Windows构建44.7s、正式Android全ABI构建122.4s；APK SHAa13b8394431bb3bea4d93fa64f766ea05e592f51287a086f57e08bffacdfea4f、Windows EXE SHA0fec6e359dcb46d91e8574e09bfe4a54b6fd35bd2f004fbbb089d925ee1d6a7f。完整交付候选均未完成正式验收。
 - R20普通目录首装初测被仍已登记的R19冷采样QA副本拒绝（符合防止异目录重复安装）；仅核对并卸载该副本，失败现场保留，改用新证据目录r20normalb重测。本轮不改生产安装器逻辑。
 - 最终R20 x64 profile84.4s构建通过，保持无trace/defaultrenderer，正式release不改全ABI；API35 R19正式候选→R20同签名覆盖成功。R20实际16步UI回归和Windows47项重测运行中。
+- 本轮范围纠正：16步Android设备UI脚本覆盖横屏、键盘、重启及返回，没有调整系统字体大小；字体放大覆盖来自Widget布局测试，不能把它写成设备字体设置验收。R20原生UI实际16步passed、清理无错误，Windows47/47实际重测通过。
+- R20最后无追踪、默认渲染设置实际100k复测通过：保存30次p95=207.632ms、组合筛选30次169.635ms、长帧2/854=0.234192%，各项达标；三格式导出、恢复100000笔通过，五份原始均设备前后/主机SHA核对。五个IO阶段最大事件循环间隔48.069ms，导航p95范围25.737–41.800ms；顶层raw gap仅最后阶段36.414ms，派生汇总已明确区分。
+- R20实际20次release冷启动p95=1471ms通过；Windows新候选47/47安装回归、Android16步UI和全量182测试通过。本轮Windows冷启动/100k界面性能未重测，R19值不移算。最终报告 `docs/native-final-r20-report.md`、SHA清单 `releases/SHA256SUMS-native-r20.txt`；API37及完整矩阵/三轮未完成范围保留。
+- 本轮按用户限制停止。已正常关闭唯一所属模拟器，未留下本任务Java构建工作进程，不开启新循环或原四小时巡检。正式完整验收0/3，未把原目标标为已达到。

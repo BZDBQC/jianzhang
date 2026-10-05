@@ -1,12 +1,27 @@
 {
   "unresolved": [
-    "R19保存确认修复已复现并修正：全量Flutter181/181、analyze无问题；独立审查及双端新候选构建复测进行中，旧R17包不能代表新源码验收",
-    "R17 Windows安装器47/47实际通过；新候选仍需完整安装、性能、视觉适配与正式回归。旧冷启动和100k开发证据保留，不替代新候选验收",
-    "API35 R17同一无追踪APK两次保存238.713/284.157ms达标，但长帧12.5179856%和0.6546645%不稳定。R18界面实验及R19无追踪Skia均未达标，实验已撤回，生产渲染未改变",
-    "API37官方模拟器在安装APK前出现SurfaceFlinger DMA断言故障，关键测试未完成；API26/29/33/35/36/37完整最终候选矩阵待完成",
-    "SAF R14b真实4/4、九表不变及缓存清理证据保留；需要新候选正式复测",
-    "同一候选连续三轮完整回归尚未开始，当前0/3；Windows10、安卓真机、真实短信未验证边界不变"
+    "按用户要求仅再优化一轮并停止；正式连续三轮完整验收仍为0/3",
+    "R20 Android API35单轮保存207.632ms/查询169.635ms/长帧2/854=.234192%及冷启动1471ms达标，未证明连续三轮稳定或真机性能",
+    "R20 Windows实际安装47/47通过；本轮Windows冷启动/100k界面性能未重新测量，R19历史冷启动1815.0468ms不移算为R20",
+    "最终候选API26/29/33/36/37矩阵未完成；API37模拟器安装APK之前存在图形断言故障",
+    "Windows10、安卓真机、真实短信发送未验证；短信配置继续为空",
+    "同一最终候选的完整SAF/云端异常恢复/视觉尺寸与系统字体矩阵未完成三轮，历史证据独立保留"
   ],
   "rounds": [],
-  "status": "implementation"
+  "status": "stopped-by-user",
+  "lastDevelopmentRound": {
+    "androidColdStartP95Ms": 1471,
+    "windowsExeSha256": "0fec6e359dcb46d91e8574e09bfe4a54b6fd35bd2f004fbbb089d925ee1d6a7f",
+    "androidQueryP95Ms": 169.635,
+    "id": "r20",
+    "stoppedAt": "2026-10-05T18:13:51.9398726+00:00",
+    "androidLongFrameRatio": 0.00234192037470726,
+    "flutterTestsPassed": 182,
+    "androidSaveP95Ms": 207.632,
+    "apkSha256": "a13b8394431bb3bea4d93fa64f766ea05e592f51287a086f57e08bffacdfea4f",
+    "windowsInstallerCasesPassed": 47,
+    "formalCleanRounds": 0,
+    "status": "completed-at-user-stop-limit",
+    "androidApi35UiStepsPassed": 16
+  }
 }
